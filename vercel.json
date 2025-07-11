@@ -1,0 +1,13 @@
+// vercel.json
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/ar/view/:id",
+      "destination": "/ar/view/:id"
+    }
+  ]
+}
