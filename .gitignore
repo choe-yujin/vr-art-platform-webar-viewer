@@ -65,3 +65,9 @@ pids
 
 # Optional eslint cache
 .eslintcache
+
+# Backup files
+*.backup
+
+# Test/Development pages
+src/app/camera-test/
