@@ -6,7 +6,7 @@ import { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createSafeWebGLContext, isWebGLSupported, getWebGLInfo } from '../utils/webgl';
+// import { createSafeWebGLContext, isWebGLSupported, getWebGLInfo } from '../utils/webgl';
 
 interface ARViewerProps {
   modelPath: string;

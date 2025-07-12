@@ -1,1 +1,67 @@
-// WebGL 컨텍스트를 안전하게 생성하는 유틸리티\nexport function createSafeWebGLContext(): WebGLRenderingContext | WebGL2RenderingContext | null {\n  try {\n    // 임시 캔버스 생성\n    const canvas = document.createElement('canvas');\n    canvas.width = 1;\n    canvas.height = 1;\n    \n    // WebGL 컨텍스트 옵션\n    const contextOptions = {\n      alpha: true,\n      antialias: false, // 모바일 성능을 위해 비활성화\n      depth: true,\n      failIfMajorPerformanceCaveat: false,\n      powerPreference: 'default' as WebGLPowerPreference,\n      premultipliedAlpha: true,\n      preserveDrawingBuffer: false,\n      stencil: true\n    };\n    \n    // WebGL2 시도\n    let gl = canvas.getContext('webgl2', contextOptions) as WebGL2RenderingContext;\n    if (gl) {\n      console.log('✅ WebGL2 컨텍스트 생성 성공');\n      return gl;\n    }\n    \n    // WebGL 1.0 시도\n    gl = canvas.getContext('webgl', contextOptions) as WebGLRenderingContext;\n    if (gl) {\n      console.log('✅ WebGL 1.0 컨텍스트 생성 성공');\n      return gl;\n    }\n    \n    // 실험적 WebGL 시도\n    gl = canvas.getContext('experimental-webgl', contextOptions) as WebGLRenderingContext;\n    if (gl) {\n      console.log('✅ Experimental WebGL 컨텍스트 생성 성공');\n      return gl;\n    }\n    \n    console.error('❌ 모든 WebGL 컨텍스트 생성 실패');\n    return null;\n    \n  } catch (error) {\n    console.error('❌ WebGL 컨텍스트 생성 중 오류:', error);\n    return null;\n  }\n}\n\n// WebGL 지원 여부 확인\nexport function isWebGLSupported(): boolean {\n  const gl = createSafeWebGLContext();\n  return gl !== null;\n}\n\n// WebGL 정보 수집\nexport function getWebGLInfo(): any {\n  const gl = createSafeWebGLContext();\n  if (!gl) return null;\n  \n  try {\n    const info = {\n      version: gl.getParameter(gl.VERSION),\n      vendor: gl.getParameter(gl.VENDOR),\n      renderer: gl.getParameter(gl.RENDERER),\n      shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),\n      maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),\n      maxViewportDims: gl.getParameter(gl.MAX_VIEWPORT_DIMS),\n      extensions: gl.getSupportedExtensions()\n    };\n    \n    console.log('WebGL 정보:', info);\n    return info;\n  } catch (error) {\n    console.error('WebGL 정보 수집 실패:', error);\n    return null;\n  }\n}\n
+// WebGL 컨텍스트 생성 유틸리티
+export function createSafeWebGLContext(canvas: HTMLCanvasElement): WebGLRenderingContext | WebGL2RenderingContext | null {
+  const contextOptions = {
+    alpha: true,
+    antialias: true,
+    depth: true,
+    stencil: false,
+    preserveDrawingBuffer: false,
+    powerPreference: 'default' as WebGLPowerPreference,
+    failIfMajorPerformanceCaveat: false
+  };
+
+  // WebGL2 시도
+  const context = canvas.getContext('webgl2', contextOptions) as WebGL2RenderingContext | null;
+  if (context) {
+    console.log('✅ WebGL2 컨텍스트 생성 성공');
+    return context;
+  }
+
+  // WebGL1 시도
+  const webgl1Context = canvas.getContext('webgl', contextOptions) as WebGLRenderingContext | null;
+  if (webgl1Context) {
+    console.log('✅ WebGL1 컨텍스트 생성 성공');
+    return webgl1Context;
+  }
+
+  // Experimental WebGL 시도
+  const experimentalContext = canvas.getContext('experimental-webgl', contextOptions) as WebGLRenderingContext | null;
+  if (experimentalContext) {
+    console.log('✅ Experimental WebGL 컨텍스트 생성 성공');
+    return experimentalContext;
+  }
+
+  console.error('❌ WebGL 컨텍스트 생성 실패');
+  return null;
+}
+
+export function isWebGLSupported(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    const context = createSafeWebGLContext(canvas);
+    return context !== null;
+  } catch (error) {
+    console.error('WebGL 지원 확인 중 오류:', error);
+    return false;
+  }
+}
+
+export function getWebGLInfo(): { vendor: string; renderer: string; version: string } | null {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = createSafeWebGLContext(canvas);
+    
+    if (!gl) return null;
+
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    
+    return {
+      vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+      renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      version: gl.getParameter(gl.VERSION)
+    };
+  } catch (error) {
+    console.error('WebGL 정보 가져오기 실패:', error);
+    return null;
+  }
+}
