@@ -6,6 +6,7 @@ import { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createSafeWebGLContext, isWebGLSupported, getWebGLInfo } from '../utils/webgl';
 
 interface ARViewerProps {
   modelPath: string;
@@ -28,6 +29,7 @@ export default function ARViewer({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [cameraPermission, setCameraPermission] = useState<'requesting' | 'granted' | 'denied' | 'fallback'>('requesting');
   const [debugInfo, setDebugInfo] = useState<string>('시작...');
+  const [showDebugPanel, setShowDebugPanel] = useState<boolean>(true); // 디버그 패널 항상 표시
   
   const containerRef = useRef<HTMLDivElement>(null);
   const initializationRef = useRef(false);
@@ -524,6 +526,25 @@ export default function ARViewer({
               </div>
             </>
           )}
+        </div>
+      )}
+      
+      {/* 디버그 패널 (모바일에서 오류 확인용) */}
+      {showDebugPanel && (
+        <div className="fixed top-0 left-0 right-0 bg-red-600/90 text-white p-2 text-xs z-50">
+          <div className="flex justify-between items-center">
+            <div>
+              <div>디버그: {debugInfo}</div>
+              <div>상태: {status} | 카메라: {cameraPermission} | 디바이스: {deviceType}</div>
+              {errorMessage && <div className="text-yellow-300">오류: {errorMessage}</div>}
+            </div>
+            <button 
+              onClick={() => setShowDebugPanel(false)}
+              className="bg-white/20 px-2 py-1 rounded text-xs"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       )}
       
