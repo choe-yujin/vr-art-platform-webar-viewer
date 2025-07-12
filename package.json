@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev-mobile": "next dev -H 0.0.0.0 -p 3000",
+    "dev-https": "next dev -H 0.0.0.0 -p 3000 --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -13,6 +15,7 @@
     "next": "15.3.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-webcam": "^7.2.0",
     "three": "^0.164.0",
     "three-icosa": "^0.4.2-alpha.18"
   },
