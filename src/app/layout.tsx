@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BAUhaus WebAR Viewer",
+  title: "LivingBrush WebAR Viewer",
   description: "Experience 3D art in AR - Scan QR codes to view immersive artworks",
-  keywords: "WebAR, 3D art, augmented reality, QR code, bauhaus",
+  keywords: "WebAR, 3D art, augmented reality, QR code, livingbrush",
   viewport: "width=device-width, initial-scale=1.0, user-scalable=no",
   openGraph: {
-    title: "BAUhaus WebAR Viewer",
+    title: "LivingBrush WebAR Viewer",
     description: "Experience 3D art in AR",
     type: "website",
   },

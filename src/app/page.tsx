@@ -6,7 +6,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-8">
       <div className="text-center text-white">
         <h1 className="text-4xl md:text-6xl font-bold mb-6">
-          BAUhaus AR
+          LivingBrush AR
         </h1>
         <p className="text-xl md:text-2xl mb-8 opacity-90">
           VR에서 창작하고, AR로 감상하는

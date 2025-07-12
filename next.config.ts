@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   
   // 이미지 최적화
   images: {
-    domains: ['cdn.bauhaus.shop', 's3.amazonaws.com'],
+    domains: ['cdn.livingbrush.shop', 's3.amazonaws.com'],
     formats: ['image/webp', 'image/avif'],
   },
   
