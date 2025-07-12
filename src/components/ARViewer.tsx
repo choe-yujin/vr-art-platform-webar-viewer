@@ -26,7 +26,6 @@ export default function ARViewer({
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const [cameraStatus, setCameraStatus] = useState<'requesting' | 'granted' | 'denied'>('requesting');
   const containerRef = useRef<HTMLDivElement>(null);
   const isInitializedRef = useRef(false);
 
@@ -35,17 +34,20 @@ export default function ARViewer({
     setDebugInfo(prev => `${prev}\n${message}`);
   }, []);
 
-  // MindAR 라이브러리 로딩 체크 (개선된 버전)
+  // MindAR 라이브러리 로딩 체크 (올바른 방법)
   const waitForMindAR = useCallback((): Promise<boolean> => {
     return new Promise((resolve) => {
       let attempts = 0;
-      const maxAttempts = 50; // 5초 대기 (100ms * 50)
+      const maxAttempts = 50;
       
       const checkMindAR = () => {
         attempts++;
         addDebugInfo(`MindAR 체크 시도 ${attempts}/${maxAttempts}`);
         
-        if ((window as any).MindARThree) {
+        // 올바른 MindAR 글로벌 객체 체크
+        if (typeof (window as any).MINDAR !== 'undefined' && 
+            (window as any).MINDAR.IMAGE && 
+            (window as any).MINDAR.IMAGE.MindARThree) {
           addDebugInfo('✅ MindAR 라이브러리 로드 완료');
           resolve(true);
           return;
@@ -64,50 +66,7 @@ export default function ARViewer({
     });
   }, [addDebugInfo]);
 
-  // 안전한 WebGL 컨텍스트 생성
-  const createSafeWebGLRenderer = useCallback((): THREE.WebGLRenderer | null => {
-    try {
-      addDebugInfo('WebGL 렌더러 생성 시도...');
-      
-      const canvas = document.createElement('canvas');
-      const contextOptions = {
-        alpha: true,
-        antialias: false, // 모바일에서 antialias 비활성화
-        depth: true,
-        stencil: false,
-        preserveDrawingBuffer: false,
-        powerPreference: 'default' as WebGLPowerPreference,
-        failIfMajorPerformanceCaveat: false
-      };
-
-      // WebGL 컨텍스트 미리 테스트
-      const testContext = canvas.getContext('webgl2', contextOptions) || 
-                         canvas.getContext('webgl', contextOptions) || 
-                         canvas.getContext('experimental-webgl', contextOptions);
-      
-      if (!testContext) {
-        throw new Error('WebGL 컨텍스트를 생성할 수 없습니다');
-      }
-      
-      addDebugInfo('✅ WebGL 컨텍스트 테스트 성공');
-      
-      // Three.js 렌더러 생성
-      const renderer = new THREE.WebGLRenderer({
-        canvas: undefined, // 새로운 캔버스 생성
-        ...contextOptions
-      });
-      
-      addDebugInfo('✅ Three.js WebGL 렌더러 생성 성공');
-      return renderer;
-      
-    } catch (error) {
-      addDebugInfo(`❌ WebGL 렌더러 생성 실패: ${error}`);
-      setErrorMessage(`WebGL 렌더러 생성 실패: ${error}`);
-      return null;
-    }
-  }, [addDebugInfo]);
-
-  // 데스크톱 3D 초기화
+  // 데스크톱 3D 초기화 (카메라 요청 없음)
   const initializeDesktop3D = useCallback(async () => {
     try {
       addDebugInfo('🖥️ 데스크톱 3D 뷰어 모드 시작');
@@ -116,12 +75,11 @@ export default function ARViewer({
         throw new Error('컨테이너 DOM이 준비되지 않음');
       }
 
-      // WebGL 렌더러 생성
-      const renderer = createSafeWebGLRenderer();
-      if (!renderer) {
-        throw new Error('WebGL 렌더러 생성 실패');
-      }
-
+      // Three.js 렌더러 생성 (카메라 사용 안함)
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true,
+        alpha: true 
+      });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x000000);
       containerRef.current.appendChild(renderer.domElement);
@@ -180,9 +138,9 @@ export default function ARViewer({
       setStatus('error');
       onLoadError?.(`3D 뷰어 오류: ${error}`);
     }
-  }, [addDebugInfo, createSafeWebGLRenderer, autoRotate, rotationSpeed, modelPath, onLoadComplete, onLoadError]);
+  }, [addDebugInfo, autoRotate, rotationSpeed, modelPath, onLoadComplete, onLoadError]);
 
-  // 모바일 AR 초기화
+  // 모바일 AR 초기화 (MindAR 사용)
   const initializeMobileAR = useCallback(async () => {
     try {
       addDebugInfo('📱 모바일 AR 모드 초기화 시작');
@@ -195,47 +153,21 @@ export default function ARViewer({
         throw new Error('MindAR 라이브러리 로딩 실패');
       }
 
-      // 2. 카메라 권한 요청
-      addDebugInfo('카메라 권한 요청 중...');
-      try {
-        await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          } 
-        });
-        setCameraStatus('granted');
-        addDebugInfo('✅ 카메라 권한 허용됨');
-      } catch (cameraError) {
-        setCameraStatus('denied');
-        addDebugInfo(`❌ 카메라 권한 거부됨: ${cameraError}`);
-        throw new Error(`카메라 권한이 필요합니다: ${cameraError}`);
-      }
-
-      // 3. WebGL 렌더러 생성
-      const renderer = createSafeWebGLRenderer();
-      if (!renderer) {
-        throw new Error('WebGL 렌더러 생성 실패');
-      }
-
-      // 4. MindAR 초기화
+      // 2. MindAR 초기화 (올바른 방법)
       addDebugInfo('MindAR AR 모드 초기화 중...');
-      const MindARThree = (window as any).MindARThree;
       
       if (!containerRef.current) {
         throw new Error('컨테이너 DOM이 준비되지 않음');
       }
 
-      const mindarThree = new MindARThree.MindARThree({
+      const mindarThree = new (window as any).MINDAR.IMAGE.MindARThree({
         container: containerRef.current,
-        imageTargetSrc: '/markers/qr-marker.mind',
-        uiLoading: 'no',
-        uiScanning: 'no',
-        uiError: 'no'
+        imageTargetSrc: '/markers/qr-marker.mind'
       });
 
-      // 5. GLB 모델 로딩
+      const { renderer, scene, camera } = mindarThree;
+      
+      // 3. GLB 모델 로딩
       addDebugInfo('GLB 모델 로딩 중...');
       const loader = new GLTFLoader();
       
@@ -257,6 +189,10 @@ export default function ARViewer({
       addDebugInfo('AR 시스템 시작 중...');
       await mindarThree.start();
       
+      renderer.setAnimationLoop(() => {
+        renderer.render(scene, camera);
+      });
+      
       addDebugInfo('🎉 모바일 AR 초기화 완료!');
       setStatus('success');
       onLoadComplete?.();
@@ -266,18 +202,14 @@ export default function ARViewer({
       setErrorMessage(`AR 초기화 실패: ${error}`);
       setStatus('error');
       onLoadError?.(`AR 초기화 실패: ${error}`);
-      
-      // 오류 시 데스크톱 모드로 fallback
-      addDebugInfo('데스크톱 3D 뷰어로 전환 시도...');
-      setTimeout(() => initializeDesktop3D(), 1000);
     }
-  }, [addDebugInfo, waitForMindAR, createSafeWebGLRenderer, modelPath, onLoadComplete, onLoadError, initializeDesktop3D]);
+  }, [addDebugInfo, waitForMindAR, modelPath, onLoadComplete, onLoadError]);
 
   useEffect(() => {
     if (isInitializedRef.current || !containerRef.current) return;
     isInitializedRef.current = true;
 
-    const container = containerRef.current; // ref 값을 변수로 복사
+    const container = containerRef.current;
 
     addDebugInfo(`=== AR 뷰어 초기화 시작 ===`);
     addDebugInfo(`디바이스 타입: ${deviceType}`);
@@ -290,7 +222,6 @@ export default function ARViewer({
     }
 
     return () => {
-      // 클린업
       if (container) {
         container.innerHTML = '';
       }
@@ -317,7 +248,6 @@ export default function ARViewer({
             {status === 'loading' ? 'loading' :
              status === 'success' ? 'success' : 'error'}
           </span>
-          <span>카메라: {cameraStatus}</span>
           <span>디바이스: {deviceType}</span>
         </div>
         {errorMessage && (
@@ -331,7 +261,9 @@ export default function ARViewer({
       {status === 'loading' && (
         <div className="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center text-white z-20">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
-          <p className="text-lg mb-2">AR 뷰어 로딩 중...</p>
+          <p className="text-lg mb-2">
+            {deviceType === 'mobile' ? 'AR 뷰어 로딩 중...' : '3D 뷰어 로딩 중...'}
+          </p>
           <div className="text-sm text-gray-300 max-w-xs text-center whitespace-pre-line">
             {debugInfo}
           </div>
@@ -342,7 +274,7 @@ export default function ARViewer({
       {status === 'error' && (
         <div className="absolute inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center text-white z-20">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2">3D 뷰어 오류</h2>
+          <h2 className="text-xl font-bold mb-2">뷰어 오류</h2>
           <p className="text-gray-300 mb-4 text-center max-w-sm">
             {errorMessage}
           </p>
@@ -354,21 +286,6 @@ export default function ARViewer({
             className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
           >
             다시 시도
-          </button>
-        </div>
-      )}
-
-      {/* 플로팅 버튼들 */}
-      {status === 'success' && (
-        <div className="absolute bottom-20 right-6 flex flex-col gap-3 z-30">
-          <button className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg">
-            📤
-          </button>
-          <button className="bg-green-600 hover:bg-green-700 text-white p-3 rounded-full shadow-lg">
-            💬
-          </button>
-          <button className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-full shadow-lg">
-            👤
           </button>
         </div>
       )}
