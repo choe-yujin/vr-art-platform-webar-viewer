@@ -1,1 +1,20 @@
-'use client';\n\nimport { useEffect, useState } from 'react';\nimport DebugARViewer from '../../components/DebugARViewer';\n\nexport default function DebugPage() {\n  const [deviceType, setDeviceType] = useState<'mobile' | 'desktop'>('desktop');\n\n  useEffect(() => {\n    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);\n    setDeviceType(isMobile ? 'mobile' : 'desktop');\n  }, []);\n\n  return (\n    <DebugARViewer \n      modelPath=\"/sample.glb\"\n      deviceType={deviceType}\n    />\n  );\n}\n
+'use client';
+
+import { useEffect, useState } from 'react';
+import DebugARViewer from '../../components/DebugARViewer';
+
+export default function DebugPage() {
+  const [deviceType, setDeviceType] = useState<'mobile' | 'desktop'>('desktop');
+
+  useEffect(() => {
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    setDeviceType(isMobile ? 'mobile' : 'desktop');
+  }, []);
+
+  return (
+    <DebugARViewer 
+      modelPath="/sample.glb"
+      deviceType={deviceType}
+    />
+  );
+}
