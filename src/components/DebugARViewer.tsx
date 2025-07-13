@@ -2,6 +2,10 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
+<<<<<<< HEAD
+=======
+import Link from 'next/link';
+>>>>>>> feature/webxr-implementation
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -26,6 +30,7 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
     try {
       addLog('📱 모바일 모드 시작');
       
+<<<<<<< HEAD
       // 카메라 권한 체크
       addLog('카메라 권한 확인 중...');
       if (!navigator?.mediaDevices?.getUserMedia) {
@@ -39,10 +44,21 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
       }
       addLog('✅ MindAR 라이브러리 확인됨');
       
+=======
+      // 카메라 권한 체크 (미래 WebXR 대비)
+      addLog('카메라 API 확인 중...');
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        addLog('⚠️ 카메라 API를 지원하지 않습니다 (WebXR에 필요할 수 있음)');
+      } else {
+        addLog('✅ 카메라 API 지원 확인됨');
+      }
+      
+>>>>>>> feature/webxr-implementation
       // WebGL 지원 체크
       const canvas = document.createElement('canvas');
       const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
       if (!gl) {
+<<<<<<< HEAD
         throw new Error('WebGL 지원하지 않음');
       }
       addLog('✅ WebGL 지원 확인됨');
@@ -55,11 +71,21 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
       }
       addLog('✅ 마커 파일 확인됨');
       
+=======
+        throw new Error('WebGL을 지원하지 않습니다.');
+      }
+      addLog('✅ WebGL 지원 확인됨');
+      
+>>>>>>> feature/webxr-implementation
       // GLB 모델 파일 체크
       addLog('GLB 모델 파일 확인 중...');
       const modelResponse = await fetch(modelPath);
       if (!modelResponse.ok) {
+<<<<<<< HEAD
         throw new Error(`GLB 모델 로드 실패: ${modelResponse.status}`);
+=======
+        throw new Error(`GLB 모델 로드 실패: ${modelResponse.statusText}`);
+>>>>>>> feature/webxr-implementation
       }
       addLog('✅ GLB 모델 파일 확인됨');
       
@@ -71,11 +97,19 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
         addLog(`⚠️ three-icosa 로드 실패: ${icosaError}`);
       }
       
+<<<<<<< HEAD
       addLog('🎉 모든 체크 완료 - AR 초기화 가능!');
       setStatus('success');
       
     } catch (error) {
       addLog(`❌ 에러: ${error}`);
+=======
+      addLog('🎉 모든 체크 완료 - 3D 뷰어 초기화 가능합니다!');
+      setStatus('success');
+      
+    } catch (error) {
+      addLog(`❌ 에러: ${(error as Error).message}`);
+>>>>>>> feature/webxr-implementation
       setStatus('error');
     }
   }, [modelPath, addLog]);
@@ -98,7 +132,11 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
       setStatus('success');
       
     } catch (error) {
+<<<<<<< HEAD
       addLog(`❌ 에러: ${error}`);
+=======
+      addLog(`❌ 에러: ${(error as Error).message}`);
+>>>>>>> feature/webxr-implementation
       setStatus('error');
     }
   }, [addLog]);
@@ -114,7 +152,11 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
     } else {
       initializeDesktopDebug();
     }
+<<<<<<< HEAD
   }, [deviceType, addLog, initializeMobileDebug, initializeDesktopDebug]);
+=======
+  }, [deviceType, initializeMobileDebug, initializeDesktopDebug]);
+>>>>>>> feature/webxr-implementation
 
   return (
     <div className="min-h-screen bg-black text-white p-4">
@@ -146,12 +188,18 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
         </div>
         
         <div className="mt-4">
+<<<<<<< HEAD
           <button 
             onClick={() => window.location.href = '/ar/view/1'}
             className="inline-block bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
           >
             ← 원래 AR 뷰어로 돌아가기
           </button>
+=======
+          <Link href="/ar/view/1" className="inline-block bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
+            ← 원래 AR 뷰어로 돌아가기
+          </Link>
+>>>>>>> feature/webxr-implementation
         </div>
       </div>
       
