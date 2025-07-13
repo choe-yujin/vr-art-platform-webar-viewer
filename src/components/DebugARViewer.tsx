@@ -15,12 +15,12 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const containerRef = useRef<HTMLDivElement>(null);
   
-  const addLog = (message: string) => {
+  const addLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logMessage = `[${timestamp}] ${message}`;
     console.log(logMessage);
     setLogs(prev => [...prev.slice(-10), logMessage]); // 최근 10개만 유지
-  };
+  }, []);
 
   const initializeMobileDebug = useCallback(async () => {
     try {
@@ -114,7 +114,7 @@ export default function DebugARViewer({ modelPath, deviceType }: DebugARViewerPr
     } else {
       initializeDesktopDebug();
     }
-  }, [deviceType, initializeMobileDebug, initializeDesktopDebug]);
+  }, [deviceType, addLog, initializeMobileDebug, initializeDesktopDebug]);
 
   return (
     <div className="min-h-screen bg-black text-white p-4">

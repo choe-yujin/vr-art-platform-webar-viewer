@@ -36,7 +36,7 @@ export default function RootLayout({
         {/* MindAR CDN */}
         <Script 
           src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
         />
       </head>
       <body
