@@ -24,10 +24,13 @@ export default function ARViewer({
   autoRotate = true,
   rotationSpeed = 0.002
 }: ARViewerProps) {
-  // 단순화된 상태 관리
-  const [status, setStatus] = useState<'loading' | 'ar-active' | 'fallback' | 'error'>('loading');
+  // 단순화된 상태 관리 (모바일 전용 상태 추가)
+  const [status, setStatus] = useState<'loading' | 'mobile-waiting' | 'ar-active' | 'fallback' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [cameraPermission, setCameraPermission] = useState<'requesting' | 'granted' | 'denied'>('requesting');
+  // 🔧 디바이스별 카메라 권한 초기값 설정
+  const [cameraPermission, setCameraPermission] = useState<'requesting' | 'granted' | 'denied'>(
+    deviceType === 'desktop' ? 'granted' : 'requesting'
+  );
   const [debugInfo, setDebugInfo] = useState<string>('시작...');
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(true);
   const [threeIcosaStatus, setThreeIcosaStatus] = useState<'loading' | 'success' | 'fallback'>('loading');
@@ -45,15 +48,19 @@ export default function ARViewer({
     console.log('✅ Container DOM 준비 완료!');
     initializationRef.current = true;
     
-    // 🎯 단순한 디바이스별 분기
+    // 🎯 디바이스별 초기화 로직 (완전히 분리된 경로)
     if (deviceType === 'mobile') {
-      // 모바일: 카메라 권한 요청 UI 표시 (사용자 선택 대기)
-      console.log('📱 모바일 모드: 카메라 권한 선택 UI 표시');
-      setDebugInfo('모바일 모드 - 사용자 선택 대기');
-      setCameraPermission('requesting'); // 카메라 권한 선택 UI 표시
+      // 모바일: 순수하게 사용자 선택 UI만 표시 (아무것도 자동 실행 없음)
+      console.log('📱 모바일 모드: 사용자 선택 대기 상태로 전환');
+      setStatus('mobile-waiting'); // 모바일 전용 대기 상태
+      setDebugInfo('모바일 모드 - 사용자 선택 대기 중');
+      console.log('🚫 모바일: 자동 실행 없음, 순수 대기 상태');
+      // 모바일에서는 아무것도 실행하지 않음 - 사용자 선택만 대기
     } else {
-      // 데스크톱: 바로 3D 뷰어
+      // 데스크톱: 정상적으로 3D 뷰어 시작
       console.log('🖥️ 데스크톱 모드: 바로 3D 뷰어 시작');
+      setStatus('loading'); // 데스크톱은 기존 로직 유지
+      setDebugInfo('데스크톱 3D 뷰어 초기화 중...');
       initializeDesktop3D(containerRef.current);
     }
 
@@ -109,10 +116,20 @@ export default function ARViewer({
       console.error('❌ MindAR 초기화 실패:', error);
       setDebugInfo(`실패: ${(error as Error).message}`);
       
-      // 조건 불만족 또는 AR 실패 시 3D 뷰어로 폴백
-      setStatus('fallback');
-      if (containerRef.current) {
-        initializeDesktop3D(containerRef.current);
+      // 🔧 모바일에서 AR 실패 시 3D 뷰어로 자동 전환하지 않음
+      // 대신 사용자가 "AR 없이 감상하기" 버튼으로 선택하도록 유도
+      if (deviceType === 'mobile') {
+        // 모바일: 사용자 선택 UI로 되돌아가기
+        setStatus('mobile-waiting'); // 모바일 전용 대기 상태
+        setCameraPermission('requesting');
+        setDebugInfo('모바일 모드 - 사용자 선택 대기 중 (AR 실패)');
+        console.log('📱 모바일 AR 실패 - 사용자 선택 UI로 복귀');
+      } else {
+        // 데스크톱: 3D 뷰어로 폴백
+        setStatus('fallback');
+        if (containerRef.current) {
+          initializeDesktop3D(containerRef.current);
+        }
       }
     }
   };
@@ -543,10 +560,10 @@ export default function ARViewer({
         style={{ backgroundColor: status === 'ar-active' ? 'transparent' : '#000000' }}
       />
       
-      {/* 🎯 모바일 → 카메라 권한 선택 UI (단순화) */}
+      {/* 🎯 모바일 → 사용자 선택 UI (완전히 분리된 상태) */}
       {deviceType === 'mobile' && 
        cameraPermission === 'requesting' && 
-       status === 'loading' && (
+       status === 'mobile-waiting' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6 max-w-sm">
             <div className="text-6xl mb-4">📱✨</div>
