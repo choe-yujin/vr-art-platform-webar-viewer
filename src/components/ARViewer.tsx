@@ -21,22 +21,20 @@ export default function ARViewer({
   onLoadComplete, 
   onLoadError,
   autoRotate = true,
-  rotationSpeed = 0.002 // 🎯 예전 코드와 동일한 속도
+  rotationSpeed = 0.002
 }: ARViewerProps) {
-  // WebXR 기반 AR 상태 관리
+  // 단순화된 상태 관리
   const [status, setStatus] = useState<'loading' | 'ar-active' | 'fallback' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [cameraPermission, setCameraPermission] = useState<'requesting' | 'granted' | 'denied'>('requesting');
   const [debugInfo, setDebugInfo] = useState<string>('시작...');
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(true);
   const [threeIcosaStatus, setThreeIcosaStatus] = useState<'loading' | 'success' | 'fallback'>('loading');
-  const [webxrSupported, setWebxrSupported] = useState<boolean>(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const initializationRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const webxrSessionRef = useRef<XRSession | null>(null);
   
   console.log('🎬 ARViewer 렌더링 시작 - 디바이스:', deviceType);
 
@@ -46,16 +44,19 @@ export default function ARViewer({
     console.log('✅ Container DOM 준비 완료!');
     initializationRef.current = true;
     
-    // 🎯 디바이스별 분기 (WebXR 기반)
+    // 🎯 단순한 디바이스별 분기
     if (deviceType === 'mobile') {
-      // 모바일: WebXR 지원 확인 → 지원되면 카메라 권한 UI, 미지원이면 바로 3D 뷰어
-      checkWebXRSupportAndProceed(containerRef.current);
+      // 모바일: 카메라 권한 요청 UI 표시 (사용자 선택 대기)
+      console.log('📱 모바일 모드: 카메라 권한 선택 UI 표시');
+      setDebugInfo('모바일 모드 - 사용자 선택 대기');
+      setCameraPermission('requesting'); // 카메라 권한 선택 UI 표시
     } else {
       // 데스크톱: 바로 3D 뷰어
+      console.log('🖥️ 데스크톱 모드: 바로 3D 뷰어 시작');
       initializeDesktop3D(containerRef.current);
     }
 
-    // 정리 함수 (세션 참조 캐시)
+    // 정리 함수
     return () => {
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -63,83 +64,31 @@ export default function ARViewer({
       if (rendererRef.current) {
         rendererRef.current.dispose();
       }
-      // WebXR 세션 정리 (캐시된 참조 사용)
-      const currentSession = webxrSessionRef.current;
-      if (currentSession) {
-        currentSession.end().catch(() => {
-          // 세션 종료 에러 무시 (이미 종료되었을 수 있음)
-        });
-      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🎯 작업지시서 패턴: WebXR 지원 확인 및 분기 처리
-  const checkWebXRSupportAndProceed = async (container: HTMLDivElement) => {
+  // 🎯 MindAR 초기화 (향후 구현)
+  const startMindAR = async () => {
     try {
-      console.log('📱 모바일 모드: WebXR 지원 확인 시작');
-      setDebugInfo('WebXR 지원 확인 중...');
+      console.log('📱 MindAR 시작');
+      setDebugInfo('MindAR 초기화 중...');
       
-      // 1. WebXR API 지원 여부 체크 (작업지시서 패턴)
-      if (navigator.xr && navigator.xr.isSessionSupported) {
-        console.log('✅ WebXR API 지원됨');
-        
-        // 2. immersive-ar 지원 여부 체크
-        const arSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        setWebxrSupported(arSupported);
-        
-        if (arSupported) {
-          console.log('✅ WebXR immersive-ar 지원됨 → 카메라 권한 요청 UI 표시');
-          setDebugInfo('WebXR AR 지원됨 - 사용자 선택 대기');
-          setCameraPermission('requesting'); // 카메라 권한 요청 UI 표시
-          return; // 여기서 멈춤 - 사용자가 버튼 클릭할 때까지 대기
-        } else {
-          console.log('⚠️ WebXR immersive-ar 미지원');
-        }
-      } else {
-        console.log('⚠️ WebXR API 미지원');
-        setWebxrSupported(false);
-      }
+      // TODO: MindAR 초기화 구현
+      // MindAR Three.js 버전 사용
+      // 마커 인식 → 모델 표시
       
-      // 3. WebXR 미지원 → 바로 3D 뷰어로 폴백
-      console.log('🔄 WebXR 미지원 → 바로 3D 뷰어로 진행');
-      setWebxrSupported(false);
-      setDebugInfo('WebXR 미지원 - 3D 뷰어로 진행');
-      setStatus('fallback');
-      initializeDesktop3D(container);
-      
-    } catch (error) {
-      console.warn('❌ WebXR 체크 실패 → 3D 뷰어로 폴백:', error);
-      setWebxrSupported(false);
-      setStatus('fallback');
-      setDebugInfo('WebXR 체크 실패 - 3D 뷰어로 진행');
-      initializeDesktop3D(container);
-    }
-  };
-
-  // 🎯 WebXR AR 초기화 (실제 구현 예정)
-  const startWebXRARSession = async () => {
-    try {
-      console.log('📱 WebXR AR 세션 시작');
-      setDebugInfo('WebXR AR 세션 생성 중...');
-      
-      // TODO: WebXR 세션 생성 및 초기화
-      // const session = await navigator.xr.requestSession('immersive-ar', {
-      //   requiredFeatures: ['hit-test'],
-      //   optionalFeatures: ['anchors', 'dom-overlay']
-      // });
-      
-      // 현재는 임시로 성공 처리 (실제 구현은 다음 단계)
+      // 현재는 임시로 성공 처리
       setStatus('ar-active');
-      setDebugInfo('WebXR AR 활성화 완료 (구현 예정)');
+      setDebugInfo('MindAR 활성화 완료 (구현 예정)');
       setCameraPermission('granted');
       onLoadComplete?.();
       
-      console.log('🎉 WebXR AR 준비 완료 (실제 구현 필요)');
+      console.log('🎉 MindAR 준비 완료 (실제 구현 필요)');
       
     } catch (error) {
-      console.error('❌ WebXR AR 초기화 실패:', error);
-      setDebugInfo(`WebXR AR 실패: ${(error as Error).message}`);
+      console.error('❌ MindAR 초기화 실패:', error);
+      setDebugInfo(`MindAR 실패: ${(error as Error).message}`);
       
       // AR 실패 시 3D 뷰어로 폴백
       setStatus('fallback');
@@ -371,19 +320,18 @@ export default function ARViewer({
       <div 
         ref={containerRef}
         className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: status === 'ar-active' ? 'transparent' : '#000000' }} // 예전 방식: 검은 배경
+        style={{ backgroundColor: status === 'ar-active' ? 'transparent' : '#000000' }}
       />
       
-      {/* 🎯 WebXR 지원 + 모바일 → 카메라 권한 선택 UI */}
+      {/* 🎯 모바일 → 카메라 권한 선택 UI (단순화) */}
       {deviceType === 'mobile' && 
-       webxrSupported && 
        cameraPermission === 'requesting' && 
        status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6 max-w-sm">
             <div className="text-6xl mb-4">📱✨</div>
-            <p className="text-lg font-medium mb-2">WebXR AR 지원 기기입니다!</p>
-            <p className="text-sm opacity-75 mb-4">바닥 인식 AR 기능을 사용하시겠습니까?</p>
+            <p className="text-lg font-medium mb-2">AR로 작품을 감상하시겠습니까?</p>
+            <p className="text-sm opacity-75 mb-4">카메라를 사용하여 현실 공간에 작품을 배치할 수 있습니다</p>
             
             <div className="space-y-3 mb-4">
               <button
@@ -391,7 +339,7 @@ export default function ARViewer({
                   try {
                     const granted = await requestCameraPermission();
                     if (granted) {
-                      await startWebXRARSession();
+                      await startMindAR();
                     }
                   } catch {
                     setStatus('fallback');
@@ -402,7 +350,7 @@ export default function ARViewer({
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-3 rounded-lg font-medium"
               >
-                📸 카메라 허용하고 AR 보기
+                📸 카메라로 AR 보기
               </button>
               
               <button
@@ -426,21 +374,7 @@ export default function ARViewer({
         </div>
       )}
       
-      {/* 🎯 WebXR 미지원 + 모바일 → 3D 뷰어 로딩 */}
-      {deviceType === 'mobile' && 
-       !webxrSupported && 
-       status === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center text-white bg-black/80 z-10">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-lg font-medium">3D 뷰어 로딩 중...</p>
-            <p className="text-sm opacity-50 mt-2">AR 미지원 기기 - 3D 모드로 진행</p>
-            <p className="text-xs opacity-40 mt-1">{debugInfo}</p>
-          </div>
-        </div>
-      )}
-      
-      {/* 🎯 데스크톱 → 기존과 동일 */}
+      {/* 데스크톱 로딩 */}
       {deviceType === 'desktop' && status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/80 z-10">
           <div className="text-center">
@@ -472,19 +406,14 @@ export default function ARViewer({
       {(status === 'ar-active' || status === 'fallback') && (
         <div className="absolute top-4 left-4 bg-black/70 text-white p-2 rounded text-sm z-10">
           <div>✅ {
-            status === 'ar-active' ? 'WebXR AR 모드' : 
-            (deviceType === 'mobile') ? 
-              (webxrSupported ? '모바일 3D 모드 (사용자 선택)' : '모바일 3D 모드 (AR 미지원)') : 
-              '데스크톱 3D 모드'
+            status === 'ar-active' ? 'MindAR 모드' : 
+            deviceType === 'mobile' ? '모바일 3D 모드' : '데스크톱 3D 모드'
           } 활성화</div>
           <div className="text-xs">
             🎨 Three-Icosa: {
               threeIcosaStatus === 'success' ? '✅ 브러시 로드됨' :
               threeIcosaStatus === 'fallback' ? '⚠️ 기본 모드' : '로딩 중...'
             }
-          </div>
-          <div className="text-xs">
-            🌐 WebXR: {webxrSupported ? '✅ 지원됨' : '❌ 미지원'}
           </div>
           {status === 'fallback' && (
             <>
@@ -505,8 +434,7 @@ export default function ARViewer({
             <div>
               <div>디버그: {debugInfo}</div>
               <div>상태: {status} | 카메라: {cameraPermission} | 디바이스: {deviceType}</div>
-              <div>WebXR: {webxrSupported ? '지원' : '미지원'} | 브러시: {threeIcosaStatus}</div>
-              <div>🎯 작업지시서 분기 로직 적용 | 🚀 WebXR 지원 기기만 카메라 권한 요청</div>
+              <div>🗑️ WebXR 제거 완료 | 🎯 MindAR 준비 중 | 브러시: {threeIcosaStatus}</div>
               {errorMessage && <div className="text-yellow-300">오류: {errorMessage}</div>}
             </div>
             <button 
@@ -519,13 +447,13 @@ export default function ARViewer({
         </div>
       )}
       
-      {/* WebXR AR 가이드 (향후 구현) */}
+      {/* MindAR 가이드 (향후 구현) */}
       {status === 'ar-active' && (
         <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-3 rounded text-sm z-10">
           <div className="text-center">
-            <div className="text-2xl mb-2">🚀</div>
-            <p className="font-medium">WebXR AR 모드 (구현 예정)</p>
-            <p className="text-xs opacity-75 mt-1">바닥을 터치하여 모델을 배치할 예정입니다</p>
+            <div className="text-2xl mb-2">📱</div>
+            <p className="font-medium">MindAR 모드 (구현 예정)</p>
+            <p className="text-xs opacity-75 mt-1">마커를 스캔하여 작품을 감상하세요</p>
           </div>
         </div>
       )}
