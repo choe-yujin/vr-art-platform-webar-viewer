@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 'use client';
 
@@ -22,7 +21,7 @@ export default function ARViewer({
   onLoadComplete, 
   onLoadError,
   autoRotate = true,
-  rotationSpeed = 0.1
+  rotationSpeed = 0.002 // 🎯 예전 코드와 동일한 속도
 }: ARViewerProps) {
   // WebXR 기반 AR 상태 관리
   const [status, setStatus] = useState<'loading' | 'ar-active' | 'fallback' | 'error'>('loading');
@@ -56,7 +55,7 @@ export default function ARViewer({
       initializeDesktop3D(containerRef.current);
     }
 
-    // 정리 함수
+    // 정리 함수 (세션 참조 캐시)
     return () => {
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -64,8 +63,12 @@ export default function ARViewer({
       if (rendererRef.current) {
         rendererRef.current.dispose();
       }
-      if (webxrSessionRef.current) {
-        webxrSessionRef.current.end();
+      // WebXR 세션 정리 (캐시된 참조 사용)
+      const currentSession = webxrSessionRef.current;
+      if (currentSession) {
+        currentSession.end().catch(() => {
+          // 세션 종료 에러 무시 (이미 종료되었을 수 있음)
+        });
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,7 +98,7 @@ export default function ARViewer({
       
       // 3. WebXR AR 초기화
       setDebugInfo('WebXR AR 세션 시작 중...');
-      await initializeWebXRAR(container);
+      await initializeWebXRAR();
       
     } catch (error) {
       console.warn('⚠️ 모바일 WebXR AR 실패, 3D 뷰어로 fallback:', error);
@@ -137,7 +140,7 @@ export default function ARViewer({
   };
 
   // 🎯 WebXR AR 초기화 (향후 구현)
-  const initializeWebXRAR = async (container: HTMLDivElement) => {
+  const initializeWebXRAR = async () => {
     try {
       console.log('📱 WebXR AR 모드 초기화 시작');
       setDebugInfo('WebXR 세션 생성 중...');
@@ -162,65 +165,64 @@ export default function ARViewer({
     }
   };
 
-  // 🎯 데스크톱: 기본 3D 뷰어
+  // 🎯 데스크톱: 기본 3D 뷰어 (예전 PC버전 렌더링 방식 적용)
   const initializeDesktop3D = async (container: HTMLDivElement) => {
     try {
-      console.log('🖥️ 3D 뷰어 모드 초기화 시작');
+      console.log('🖥️ 3D 뷰어 모드 초기화 시작 (개선된 렌더링)');
       setDebugInfo('3D 뷰어 라이브러리 로딩 중...');
       
       // 컨테이너 정리
       container.innerHTML = '';
       
-      // Scene 생성
+      // 🎯 예전 방식: Scene 생성 (조명 최소화)
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x1a1a1a);
+      // 배경색을 검은색으로 (예전 방식)
+      scene.background = new THREE.Color(0x000000);
       
-      // 카메라 설정
+      // 🎯 예전 방식: Camera 설정
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(2, 2, 2);
+      scene.add(camera); // 예전 방식: 카메라를 씬에 추가
       
-      // 조명 설정
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambientLight);
+      // 🎯 예전 방식: 카메라 위치 및 회전 설정
+      camera.position.set(1, 1, 1);
+      camera.setRotationFromEuler(new THREE.Euler(0.2, 1, -0.25));
       
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(10, 10, 5);
-      scene.add(directionalLight);
-      
-      // WebGL 렌더러
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      // 🎯 예전 방식: 최소한의 렌더러 설정
+      const renderer = new THREE.WebGLRenderer();
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
-      // OrbitControls
+      // 🎯 OrbitControls 추가 (사용성 향상, 예전 설정 적용)
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
       controls.screenSpacePanning = false;
-      controls.minDistance = 0.1;
-      controls.maxDistance = 100;
-      controls.maxPolarAngle = Math.PI;
+      
+      // 🎯 예전 방식: 확대/축소 제한 완화
+      controls.minDistance = 0.1;  // 매우 가까이
+      controls.maxDistance = 100;  // 매우 멀리
+      controls.maxPolarAngle = Math.PI; // 완전한 회전 허용
+      
+      // 🎯 예전 방식: 자동 회전 설정 (천천히)
       controls.autoRotate = autoRotate;
-      controls.autoRotateSpeed = rotationSpeed;
+      controls.autoRotateSpeed = rotationSpeed * 5; // 0.002 * 5 = 0.01
 
-      console.log('✅ 3D 씬 초기화 완료');
+      console.log('✅ 3D 씬 초기화 완료 (개선된 방식)');
       setDebugInfo('3D 모델 로딩 중...');
 
-      // GLB 모델 로딩
-      await loadModelWithThreeIcosa(scene);
+      // 🎯 예전 방식으로 GLB 모델 로딩
+      await loadModelOriginalStyle(scene, camera, controls);
 
       // 성공 상태 설정
       if (status === 'loading') {
         setStatus('fallback'); // 3D 뷰어 모드
       }
       onLoadComplete?.();
-      setDebugInfo('3D 뷰어 완료!');
+      setDebugInfo('3D 뷰어 완료! (개선된 렌더링)');
 
-      // 렌더링 루프
+      // 🎯 예전 방식: 단순한 렌더링 루프
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
         controls.update();
@@ -284,16 +286,16 @@ export default function ARViewer({
     }
   };
 
-  // 🎯 Three-Icosa 확장과 함께 모델 로딩
-  const loadModelWithThreeIcosa = async (parent: THREE.Object3D) => {
+  // 🎯 예전 PC버전 방식: 모델 로딩 (개선된 렌더링)
+  const loadModelOriginalStyle = async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
-      console.log(`🔄 모델 로딩 시작:`, modelPath);
+      console.log(`🔄 모델 로딩 시작 (개선된 방식):`, modelPath);
       setThreeIcosaStatus('loading');
       
       const loader = new GLTFLoader();
       let threeIcosaLoaded = false;
       
-      // Three-Icosa 확장자 등록 시도
+      // 🎯 예전 방식: Three-Icosa 확장자 등록
       try {
         setDebugInfo('Three-Icosa 브러시 확장 로딩 중...');
         
@@ -302,29 +304,14 @@ export default function ARViewer({
         const { GLTFGoogleTiltBrushMaterialExtension } = threeIcosaModule;
         
         if (GLTFGoogleTiltBrushMaterialExtension) {
-          // 브러시 경로 우선순위: CDN → 로컬
-          const brushPaths = [
-            'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/',
-            '/brushes/'
-          ];
+          // 🎯 예전 방식: 원본 브러시 경로 사용
+          const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+          loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
           
-          let brushPathUsed = null;
-          for (const brushPath of brushPaths) {
-            try {
-              loader.register((parser: any) => new GLTFGoogleTiltBrushMaterialExtension(parser, brushPath));
-              brushPathUsed = brushPath;
-              break;
-            } catch (pathError) {
-              console.warn(`⚠️ 브러시 경로 실패 (${brushPath}):`, pathError);
-            }
-          }
-          
-          if (brushPathUsed) {
-            console.log(`✅ Three-Icosa 확장자 등록 완료 (경로: ${brushPathUsed})`);
-            setThreeIcosaStatus('success');
-            threeIcosaLoaded = true;
-            setDebugInfo('Three-Icosa 브러시 로드 완료!');
-          }
+          console.log(`✅ Three-Icosa 확장자 등록 완료 (원본 경로)`);
+          setThreeIcosaStatus('success');
+          threeIcosaLoaded = true;
+          setDebugInfo('Three-Icosa 브러시 로드 완료!');
         }
       } catch (icosaError) {
         console.warn('⚠️ Three-Icosa 로드 실패 (기본 GLTFLoader로 진행):', icosaError);
@@ -337,38 +324,54 @@ export default function ARViewer({
         
         loader.load(
           modelPath,
-          (gltf: any) => {
-            console.log(`🎉 모델 로딩 성공!`);
+          (gltf) => {
+            console.log(`🎉 모델 로딩 성공! (개선된 방식)`);
             
-            const model = gltf.scene;
+            // 🎯 예전 방식: model.scene을 직접 추가
+            scene.add(gltf.scene);
             
-            // 모델 크기 및 위치 조정
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
+            // 🎯 예전 방식: 모델 크기에 따라 카메라 타겟 조정
+            const box = new THREE.Box3().setFromObject(gltf.scene);
             const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
             
-            // 적절한 스케일 조정
+            // 모델 중심점으로 OrbitControls 타겟 설정
+            controls.target.copy(center);
+            
+            // 🎯 예전 방식: 모델이 더 크게 보이도록 카메라 거리 조정
             const maxDimension = Math.max(size.x, size.y, size.z);
-            const targetSize = 1.0;
-            const scale = targetSize / maxDimension;
+            const distance = maxDimension * 0.5; // 예전 코드와 동일한 비율
             
-            model.scale.setScalar(scale);
-            model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+            // 🎯 예전 방식: 카메라 위치를 모델 크기에 맞게 조정 (원본 비율 유지)
+            const originalDistance = Math.sqrt(1*1 + 1*1 + 1*1); // 원본 (1,1,1)의 거리
+            const scale = distance / originalDistance;
             
-            parent.add(model);
+            camera.position.set(
+              1 * scale + center.x,
+              1 * scale + center.y, 
+              1 * scale + center.z
+            );
             
-            console.log(`✅ 모델이 씬에 추가됨 (스케일: ${scale.toFixed(3)})`);
+            controls.update();
+            
+            console.log('✅ 모델이 씬에 추가됨 (개선된 방식)');
+            console.log('📊 모델 중심:', center);
+            console.log('📊 모델 크기:', size);
+            console.log('📊 카메라 위치:', camera.position);
             setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(Tilt Brush 브러시 포함)' : '(기본 모드)'}`);
             resolve(gltf);
           },
           (progress) => {
-            const percent = Math.round((progress.loaded / progress.total) * 100);
-            setDebugInfo(`모델 로딩 중... ${percent}%`);
+            if (progress.total > 0) {
+              const percent = Math.round((progress.loaded / progress.total) * 100);
+              setDebugInfo(`모델 로딩 중... ${percent}%`);
+            }
           },
-          (error: any) => {
-            console.error(`❌ 모델 로딩 실패:`, error);
-            setDebugInfo(`모델 로딩 실패: ${error.message}`);
-            reject(error);
+          (loadError) => {
+            console.error(`❌ 모델 로딩 실패:`, loadError);
+            const errorMessage = loadError instanceof Error ? loadError.message : 'Unknown error';
+            setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
+            reject(loadError);
           }
         );
       });
@@ -385,7 +388,7 @@ export default function ARViewer({
       <div 
         ref={containerRef}
         className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: status === 'ar-active' ? 'transparent' : '#1a1a1a' }}
+        style={{ backgroundColor: status === 'ar-active' ? 'transparent' : '#000000' }} // 예전 방식: 검은 배경
       />
       
       {/* 카메라 권한 요청 중 (모바일 WebXR만) */}
@@ -402,9 +405,9 @@ export default function ARViewer({
                   try {
                     const granted = await requestCameraPermission();
                     if (granted && containerRef.current) {
-                      await initializeWebXRAR(containerRef.current);
+                      await initializeWebXRAR();
                     }
-                  } catch (error) {
+                  } catch {
                     setStatus('fallback');
                     if (containerRef.current) {
                       initializeDesktop3D(containerRef.current);
@@ -443,7 +446,7 @@ export default function ARViewer({
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p className="text-lg font-medium">
-              {webxrSupported ? 'WebXR AR 뷰어 로딩 중...' : '3D 뷰어 로딩 중...'}
+              {webxrSupported ? 'WebXR AR 뷰어 로딩 중...' : '개선된 3D 뷰어 로딩 중...'}
             </p>
             <p className="text-sm opacity-50 mt-2">{debugInfo}</p>
           </div>
@@ -490,6 +493,7 @@ export default function ARViewer({
               <div className="text-xs opacity-75 mt-1">
                 {deviceType === 'mobile' ? '터치: 회전 | 핀치: 확대/축소' : '마우스: 회전 | 휠: 확대/축소'}
               </div>
+              <div className="text-xs text-green-400">🎯 개선된 렌더링 적용</div>
             </>
           )}
         </div>
@@ -503,7 +507,7 @@ export default function ARViewer({
               <div>디버그: {debugInfo}</div>
               <div>상태: {status} | 카메라: {cameraPermission} | 디바이스: {deviceType}</div>
               <div>WebXR: {webxrSupported ? '지원' : '미지원'} | 브러시: {threeIcosaStatus}</div>
-              <div>🗑️ MindAR 제거완료 | 🚀 WebXR 준비단계</div>
+              <div>🗑️ MindAR 제거완료 | 🚀 WebXR 준비단계 | 🎯 렌더링 개선 적용</div>
               {errorMessage && <div className="text-yellow-300">오류: {errorMessage}</div>}
             </div>
             <button 

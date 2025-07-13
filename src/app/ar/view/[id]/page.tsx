@@ -39,7 +39,7 @@ export default function ARViewerPage() {
           onLoadComplete={handleLoadComplete}
           onLoadError={handleLoadError}
           autoRotate={true}          // 자동 회전 활성화
-          rotationSpeed={0.5}        // 천천히 회전 (0.05 = 매우 천천히, 0.1 = 천천히, 0.5 = 보통)
+          rotationSpeed={0.05}        // 천천히 회전 (0.05 = 매우 천천히, 0.1 = 천천히, 0.5 = 보통)
         />
       </div>
 
