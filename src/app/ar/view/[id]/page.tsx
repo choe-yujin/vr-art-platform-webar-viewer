@@ -7,7 +7,8 @@ import ARViewer from '@/components/ARViewer';
 export default function ARViewerPage() {
   const params = useParams();
   const artworkId = params.id;
-  const [deviceType, setDeviceType] = useState<'mobile' | 'desktop'>('desktop');
+  // 🔧 초기값을 null로 설정하여 디바이스 감지 완료까지 대기
+  const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
   const [isViewerReady, setIsViewerReady] = useState(false);
 
   useEffect(() => {
@@ -15,9 +16,11 @@ export default function ARViewerPage() {
     const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
       navigator.userAgent
     );
-    setDeviceType(isMobile ? 'mobile' : 'desktop');
+    const detectedType = isMobile ? 'mobile' : 'desktop';
+    setDeviceType(detectedType);
     
-    console.log('📱 디바이스 타입:', isMobile ? 'Mobile' : 'Desktop');
+    console.log('📱 디바이스 타입 감지 완료:', detectedType);
+    console.log('🔍 User Agent:', navigator.userAgent);
   }, []);
 
   const handleLoadComplete = () => {
@@ -35,7 +38,7 @@ export default function ARViewerPage() {
       <div id="ar-container" className="w-full h-full relative">
         <ARViewer
           modelPath="/sample.glb"
-          deviceType={deviceType}
+          deviceType={deviceType || 'desktop'} // null 방지
           onLoadComplete={handleLoadComplete}
           onLoadError={handleLoadError}
           autoRotate={true}          // 자동 회전 활성화
