@@ -444,12 +444,14 @@ export default function ARViewer({
     }
   };
 
-  // 🎯 카메라 권한 요청
+  // 🔧 강화된 카메라 권한 요청 및 상태 업데이트
   const requestCameraPermission = async (): Promise<boolean> => {
     try {
-      console.log('📸 카메라 권한 요청 중...');
+      console.log('📸 카메라 권한 요청 시작...');
+      setDebugInfo('브라우저 카메라 권한 확인 중...');
       
       if (!navigator?.mediaDevices?.getUserMedia) {
+        console.error('❌ 브라우저가 카메라를 지원하지 않음');
         throw new Error('이 브라우저는 카메라를 지원하지 않습니다');
       }
       
@@ -462,20 +464,31 @@ export default function ARViewer({
         audio: false
       };
       
+      console.log('📸 getUserMedia 호출 중...', constraints);
+      setDebugInfo('사용자에게 카메라 권한 요청 중...');
+      
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      console.log('✅ 카메라 스트림 획득 성공:', stream);
+      console.log('✅ 카메라 스트림 획득 성공!', stream);
+      console.log('📹 비디오 트랙:', stream.getVideoTracks());
       
       // 권한 확인 후 스트림 정리
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        console.log('🚫 트랙 정리:', track.kind, track.label);
+        track.stop();
+      });
       
-      console.log('✅ 카메라 권한 허용됨');
+      console.log('✅ 카메라 권한 허용됨 - 상태 업데이트');
       setCameraPermission('granted');
+      setDebugInfo('카메라 권한 허용 완료!');
       return true;
       
     } catch (error) {
       console.error('❌ 카메라 권한 요청 실패:', error);
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+      
       setCameraPermission('denied');
+      setDebugInfo(`카메라 권한 실패: ${errorMessage}`);
       
       return false;
     }
@@ -600,11 +613,27 @@ export default function ARViewer({
               <button
                 onClick={async () => {
                   try {
+                    console.log('📸 사용자가 "AR 보기" 버튼 클릭');
+                    setDebugInfo('카메라 권한 요청 중...');
+                    
                     const granted = await requestCameraPermission();
+                    console.log('📸 카메라 권한 요청 결과:', granted);
+                    
                     if (granted) {
+                      console.log('✅ 카메라 권한 허용됨 - AR 초기화 시작');
+                      setDebugInfo('카메라 권한 허용됨! AR 초기화 중...');
                       await startMindAR();
+                    } else {
+                      console.log('❌ 카메라 권한 거부됨 - 3D 모드로 대체');
+                      setDebugInfo('카메라 권한 거부됨 - 3D 모드로 전환');
+                      setStatus('fallback');
+                      if (containerRef.current) {
+                        initializeDesktop3D(containerRef.current);
+                      }
                     }
-                  } catch {
+                  } catch (error) {
+                    console.error('❌ AR 초기화 전체 실패:', error);
+                    setDebugInfo(`AR 실패: ${(error as Error).message}`);
                     setStatus('fallback');
                     if (containerRef.current) {
                       initializeDesktop3D(containerRef.current);
