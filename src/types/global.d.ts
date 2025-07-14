@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // MindAR Three.js 타입 정의
 export interface MindARThreeConfig {
@@ -18,6 +19,8 @@ export interface MindARThreeInstance {
 
 export interface MindARThreeAnchor {
   group: THREE.Group;
+  onTargetFound?: () => void;
+  onTargetLost?: () => void;
 }
 
 export interface MindARThreeConstructor {
@@ -46,6 +49,8 @@ declare global {
   interface Window {
     MindAR_THREE: typeof THREE;
     MindAR_MindARThree: MindARThreeConstructor;
+    // ✨ 에러 해결: MindAR_GLTFLoader 타입 추가
+    MindAR_GLTFLoader: typeof GLTFLoader; 
   }
 }
 
