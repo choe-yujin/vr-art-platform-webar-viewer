@@ -35,12 +35,6 @@ export default function DesktopViewer({
   const animationFrameRef = useRef<number | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   
-  const threeIcosaStateRef = useRef({
-    isLoading: false,
-    isLoaded: false,
-    hasError: false
-  });
-  
   const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
 
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
@@ -48,23 +42,17 @@ export default function DesktopViewer({
       const loader = new GLTFLoader();
       let threeIcosaLoaded = false;
       
-      if (!threeIcosaStateRef.current.isLoaded) {
-        try {
-          const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
-          const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
-          // 기존 ARViewer와 동일한 간단한 방식
-          loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
-          threeIcosaStateRef.current.isLoaded = true;
-          threeIcosaLoaded = true;
-        } catch (icosaError) {
-          threeIcosaStateRef.current.hasError = true;
-          console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
-        }
-      } else {
+      // 별도의 상태 처리 없이 매번 새로 등록
+      try {
         const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
         const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+        // 매번 새로운 로더에 확장자 등록
         loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
         threeIcosaLoaded = true;
+        console.log('✅ Three-Icosa 확장자 등록 성공');
+      } catch (icosaError) {
+        console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
+        threeIcosaLoaded = false;
       }
 
       const gltf = await loader.loadAsync(modelPath, (progress) => {
@@ -182,11 +170,7 @@ export default function DesktopViewer({
     if (initializationRef.current) return;
     initializationRef.current = true;
     
-    // 🔧 ESLint 경고 해결: ref 값을 변수로 복사
-    const currentContainer = containerRef.current;
-    const currentThreeIcosaState = threeIcosaStateRef.current;
     const currentRenderId = renderIdRef.current;
-    
     console.log(`✅ DesktopViewer 초기화 시작 [${currentRenderId}]`);
     const cleanupResize = initializeDesktop3D();
 
@@ -216,14 +200,11 @@ export default function DesktopViewer({
         rendererRef.current.forceContextLoss();
         rendererRef.current = null;
       }
-      
-      // 🔧 ESLint 경고 해결: 복사된 변수 사용
-      if (currentContainer) {
-        currentContainer.innerHTML = '';
+      if(containerRef.current) {
+        containerRef.current.innerHTML = '';
       }
       
       initializationRef.current = false;
-      currentThreeIcosaState.isLoaded = false;
     };
   }, [initializeDesktop3D]);
 
