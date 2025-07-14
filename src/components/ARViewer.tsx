@@ -83,7 +83,8 @@ export default function ARViewer({
 
     // 🔧 강화된 정리 함수
     return () => {
-      console.log(`🧹 정리 함수 실행 [${renderIdRef.current}]`);
+      const renderId = renderIdRef.current; // ref 값을 변수에 복사
+      console.log(`🧹 정리 함수 실행 [${renderId}]`);
       cleanupRef.current = true;
       componentMountedRef.current = false;
       
@@ -102,10 +103,10 @@ export default function ARViewer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🎯 MindAR CDN 스크립트 동적 삽입 (조건 철저히 체크 후 실행)
-  const startMindAR = async () => {
+  // 🔧 권한 상태 직접 전달 방식의 MindAR 시작 (상태 동기화 문제 해결)
+  const startMindARWithPermission = async (hasPermission: boolean) => {
     try {
-      console.log('📱 MindAR 시작 - 조건 체크 중...');
+      console.log('📱 MindAR 시작 (권한 직접 전달) - 조건 체크 중...');
       setDebugInfo('조건 체크 중: 모바일+AR선택+권한허용');
       
       // 🔍 조건 1: 모바일 디바이스 체크
@@ -116,17 +117,20 @@ export default function ARViewer({
       }
       console.log('✅ 조건 1: 모바일 디바이스 확인');
       
-      // 🔍 조건 2: AR 선택 (사용자가 "카메라로 AR 보기" 버튼 클릭)
+      // 🔍 조건 2: AR 선택 (사용자가 "카메라로 AR 보기" 버튼 클립)
       console.log('✅ 조건 2: 사용자가 AR 모드 선택함');
       setDebugInfo('조건 체크 중: 카메라 권한 확인...');
       
-      // 🔍 조건 3: 카메라 권한 허용 체크
-      if (cameraPermission !== 'granted') {
+      // 🔍 조건 3: 카메라 권한 허용 체크 (매개변수로 직접 전달받음)
+      console.log('🔍 직접 전달된 권한 상태:', hasPermission);
+      console.log('🔍 React state 카메라 권한 상태:', cameraPermission);
+      
+      if (!hasPermission) {
         console.log('❌ 조건 체크 실패: 카메라 권한이 허용되지 않음');
-        setDebugInfo(`카메라 권한 상태: ${cameraPermission} - AR 사용 불가`);
+        setDebugInfo('카메라 권한 실패 - AR 사용 불가');
         throw new Error('카메라 권한이 허용되지 않음');
       }
-      console.log('✅ 조건 3: 카메라 권한 허용됨');
+      console.log('✅ 조건 3: 카메라 권한 허용됨 (직접 전달)');
       
       // 🎉 모든 조건 만족! MindAR 스크립트 로딩 시작
       console.log('🎉 모든 조건 만족! 모바일+AR선택+권한허용 완료');
@@ -139,10 +143,10 @@ export default function ARViewer({
       await initializeMindARSession();
       
     } catch (error) {
-      console.error('❌ MindAR 초기화 실패:', error);
+      console.error('❌ MindAR 초기화 실패 (권한 직접 전달):', error);
       setDebugInfo(`실패: ${(error as Error).message}`);
       
-      // 🔧 모바일에서 AR 실패 시 3D 뷰어로 자동 전환하지 않음
+      // 🔧 모바일에서 AR 실패 시 3D 다로 자동 전환하지 않음
       // 대신 사용자가 "AR 없이 감상하기" 버튼으로 선택하도록 유도
       if (deviceType === 'mobile') {
         // 모바일: 사용자 선택 UI로 되돌아가기
@@ -622,7 +626,16 @@ export default function ARViewer({
                     if (granted) {
                       console.log('✅ 카메라 권한 허용됨 - AR 초기화 시작');
                       setDebugInfo('카메라 권한 허용됨! AR 초기화 중...');
-                      await startMindAR();
+                      
+                      // 🔧 React 상태 업데이트 완료까지 대기 (중요!)
+                      console.log('⏳ React 상태 업데이트 대기 중...');
+                      await new Promise(resolve => setTimeout(resolve, 200));
+                      
+                      // 🔧 상태 강제 업데이트 확인
+                      console.log('🔍 상태 업데이트 후 카메라 권한 상태:', cameraPermission);
+                      
+                      // 🔧 권한 상태 직접 전달하는 방식으로 변경
+                      await startMindARWithPermission(true);
                     } else {
                       console.log('❌ 카메라 권한 거부됨 - 3D 모드로 대체');
                       setDebugInfo('카메라 권한 거부됨 - 3D 모드로 전환');
