@@ -36,42 +36,68 @@ export default function ARViewer({
   const [threeIcosaStatus, setThreeIcosaStatus] = useState<'loading' | 'success' | 'fallback'>('loading');
   
   const containerRef = useRef<HTMLDivElement>(null);
+  // 🔧 중복 렌더링 방지를 위한 강화된 초기화 상태 관리
   const initializationRef = useRef(false);
+  const componentMountedRef = useRef(false);
+  const cleanupRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   
-  console.log('🎬 ARViewer 렌더링 시작 - 디바이스:', deviceType);
+  // 🔧 렌더링 추적을 위한 고유 ID 생성
+  const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
+  
+  // 🔧 중복 렌더링 감지 및 로깅
+  if (!componentMountedRef.current) {
+    console.log(`🎬 ARViewer 첫 렌더링 [${renderIdRef.current}] - 디바이스:`, deviceType);
+    componentMountedRef.current = true;
+  } else {
+    console.log(`🔄 ARViewer 재렌더링 감지 [${renderIdRef.current}] - 디바이스:`, deviceType, '(초기화 스킵)');
+  }
 
   useEffect(() => {
-    if (!containerRef.current || initializationRef.current) return;
+    // 🔧 강화된 중복 실행 방지 체크
+    if (!containerRef.current || initializationRef.current || cleanupRef.current) {
+      console.log(`⏭️ 초기화 스킵 [${renderIdRef.current}] - Container: ${!!containerRef.current}, Init: ${initializationRef.current}, Cleanup: ${cleanupRef.current}`);
+      return;
+    }
     
-    console.log('✅ Container DOM 준비 완료!');
+    console.log(`✅ Container DOM 준비 완료! [${renderIdRef.current}]`);
     initializationRef.current = true;
+    componentMountedRef.current = true;
     
     // 🎯 디바이스별 초기화 로직 (완전히 분리된 경로)
     if (deviceType === 'mobile') {
       // 모바일: 순수하게 사용자 선택 UI만 표시 (아무것도 자동 실행 없음)
-      console.log('📱 모바일 모드: 사용자 선택 대기 상태로 전환');
+      console.log(`📱 모바일 모드: 사용자 선택 대기 상태로 전환 [${renderIdRef.current}]`);
       setStatus('mobile-waiting'); // 모바일 전용 대기 상태
       setDebugInfo('모바일 모드 - 사용자 선택 대기 중');
-      console.log('🚫 모바일: 자동 실행 없음, 순수 대기 상태');
+      console.log(`🚫 모바일: 자동 실행 없음, 순수 대기 상태 [${renderIdRef.current}]`);
       // 모바일에서는 아무것도 실행하지 않음 - 사용자 선택만 대기
     } else {
       // 데스크톱: 정상적으로 3D 뷰어 시작
-      console.log('🖥️ 데스크톱 모드: 바로 3D 뷰어 시작');
+      console.log(`🖥️ 데스크톱 모드: 바로 3D 뷰어 시작 [${renderIdRef.current}]`);
       setStatus('loading'); // 데스크톱은 기존 로직 유지
       setDebugInfo('데스크톱 3D 뷰어 초기화 중...');
       initializeDesktop3D(containerRef.current);
     }
 
-    // 정리 함수
+    // 🔧 강화된 정리 함수
     return () => {
+      console.log(`🧹 정리 함수 실행 [${renderIdRef.current}]`);
+      cleanupRef.current = true;
+      componentMountedRef.current = false;
+      
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
       if (rendererRef.current) {
         rendererRef.current.dispose();
+        rendererRef.current = null;
       }
+      
+      // 초기화 상태 리셋
+      initializationRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
