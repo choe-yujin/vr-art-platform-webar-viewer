@@ -321,11 +321,12 @@ setStatus('error');
         </div>
       )}
       
-      {/* 🔧 작품 정보 (가운데 하단) */}
+
+
+{/* 🔧 작품 정보 (왼쪽 하단으로 변경) */}
       {status === 'active' && (
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black/70 backdrop-blur-md text-white p-4 rounded-xl z-10">
-          <div className="text-center">
-            <div className="text-2xl mb-2">✨</div>
+        <div className="absolute bottom-6 left-6 bg-black/70 backdrop-blur-md text-white p-4 rounded-xl z-10">
+          <div className="text-left">
             <p className="font-bold text-lg">작품명: 폴라리스</p>
             <p className="text-sm opacity-75 mt-1">VR로 창작된 3D 아트워크</p>
           </div>

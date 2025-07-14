@@ -12,6 +12,8 @@ export default function ARViewerPage() {
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
   const [userChoice, setUserChoice] = useState<'ar' | 'desktop' | null>(null);
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | null>(null);
+  const [showARErrorPopup, setShowARErrorPopup] = useState(false);
+  const [arErrorMessage, setArErrorMessage] = useState('');
   
   const deviceDetectedRef = useRef(false);
   const renderLoggedRef = useRef(false);
@@ -72,6 +74,16 @@ export default function ARViewerPage() {
       setDebugInfo(`카메라 권한 실패: ${errorMessage}`);
       return false;
     }
+  };
+
+  // AR 오류 처리 함수
+  const handleARError = (error: string) => {
+    console.error('❌ AR 뷰어 오류:', error);
+    setArErrorMessage(error);
+    setShowARErrorPopup(true);
+    // AR 상태 초기화
+    setUserChoice(null);
+    setCameraPermission(null);
   };
 
   // 🎯 명확한 조건 분리
@@ -222,6 +234,55 @@ export default function ARViewerPage() {
         </div>
       )}
 
+      {/* 🆕 AR 오류 팝업 */}
+      {showARErrorPopup && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              <div className="text-4xl mb-4">⚠️</div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">AR 뷰어 오류</h3>
+              <p className="text-gray-600 mb-4">
+                현재 {arErrorMessage.includes('MindAR') ? 'MindAR 초기화' : 
+                      arErrorMessage.includes('카메라') ? '카메라 접근' : 
+                      arErrorMessage.includes('권한') ? '권한' : 
+                      '시스템'} 오류로 AR 뷰어를 사용할 수 없습니다.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                3D 뷰어로 작품을 감상해보세요!
+              </p>
+              
+              <div className="space-y-3">
+                <button 
+                  onClick={() => {
+                    setShowARErrorPopup(false);
+                    setUserChoice('desktop');
+                  }}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  🎨 3D 뷰어로 감상하기
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    setShowARErrorPopup(false);
+                    setArErrorMessage('');
+                  }}
+                  className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  다시 선택하기
+                </button>
+              </div>
+
+              {/* 디버그 정보 (개발용) */}
+              <details className="mt-4 text-left">
+                <summary className="text-xs text-gray-400 cursor-pointer">오류 상세정보</summary>
+                <p className="text-xs text-gray-400 mt-2 break-all">{arErrorMessage}</p>
+              </details>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 🎯 3단계 조건 만족시에만 ARViewer 렌더링 */}
       {shouldRenderARViewer && (
         <div className="w-full h-full">
@@ -231,11 +292,7 @@ export default function ARViewerPage() {
             onLoadComplete={() => {
               console.log('✅ 모바일 AR (MindAR) 로딩 완료');
             }}
-            onLoadError={(error: string) => {
-              console.error('❌ 모바일 AR 로딩 실패:', error);
-              setUserChoice(null);
-              setCameraPermission(null);
-            }}
+            onLoadError={handleARError}
             autoRotate={false}
           />
         </div>
