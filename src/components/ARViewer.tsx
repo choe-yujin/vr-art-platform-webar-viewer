@@ -27,6 +27,8 @@ export default function ARViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const initializationRef = useRef(false);
   const cleanupRef = useRef(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const markerFoundRef = useRef(false);
   
   // 🔧 MindAR 글로벌 상태
   const mindARStateRef = useRef({
@@ -266,6 +268,7 @@ export default function ARViewer({
   // 🔧 MindAR 세션 초기화
   const initializeMindARSession = useCallback(async (): Promise<void> => {
     try {
+      markerFoundRef.current = false;
       console.log('🚀 MindAR 세션 초기화 시작');
       setDebugInfo('MindAR 인스턴스 생성 중...');
       
@@ -281,7 +284,7 @@ export default function ARViewer({
       
       const mindarThree = new MindARThree({
         container: containerRef.current!,
-        imageTargetSrc: 'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind',
+        imageTargetSrc: '/markers/qr-marker.mind',
       });
       
       const { renderer, scene, camera } = mindarThree;
@@ -290,6 +293,22 @@ export default function ARViewer({
       const anchor = mindarThree.addAnchor(0);
       console.log('✅ AR 앵커 생성 완료');
       
+      // 🎯 마커 인식 성공 이벤트 핸들러
+      (anchor as any).onTargetFound = () => {
+        console.log('🎯 마커 인식 성공!');
+        setDebugInfo('마커 인식 성공! 모델을 표시합니다.');
+        markerFoundRef.current = true;
+        if (timeoutRef.current) {
+          console.log('⏰ 마커 인식 타임아웃을 제거합니다.');
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      };
+
+      (anchor as any).onTargetLost = () => {
+        console.log('💨 마커를 잃었습니다. 다시 스캔해주세요.');
+        setDebugInfo('마커를 찾고 있습니다...');
+      };
       setDebugInfo('3D 모델 로딩 중...');
       
       await loadModelForMindAR(anchor.group, THREE);
@@ -300,6 +319,16 @@ export default function ARViewer({
       try {
         await mindarThree.start();
         console.log('✅ MindAR 세션 시작 성공');
+
+        // ⏰ 5초 마커 인식 타임아웃 설정
+        timeoutRef.current = setTimeout(() => {
+          if (!markerFoundRef.current) {
+            console.error('❌ 5초 동안 마커를 인식하지 못했습니다.');
+            mindarThree.stop(); // AR 세션 중지
+            onLoadError?.('마커를 5초 안에 인식하지 못했습니다.');
+          }
+        }, 5000);
+
       } catch (startError) {
         console.error('❌ MindAR 세션 시작 실패:', startError);
         const errorMessage = startError instanceof Error ? startError.message : String(startError);
@@ -317,7 +346,7 @@ export default function ARViewer({
       console.error('❌ MindAR 세션 초기화 실패:', error);
       throw error;
     }
-  }, [loadModelForMindAR]);
+  }, [loadModelForMindAR, onLoadError]);
 
   // 🔧 모바일 AR 초기화 (AR 전용)
   const initializeMobileAR = useCallback(async () => {
@@ -375,6 +404,10 @@ export default function ARViewer({
     // 정리 함수
     return () => {
       console.log(`🧹 ARViewer 정리 [${currentRenderId}]`);
+      // ⏰ 컴포넌트 언마운트 시 타임아웃 제거
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
       cleanupRef.current = true;
       initializationRef.current = false;
     };
@@ -435,20 +468,7 @@ export default function ARViewer({
         <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-3 rounded text-sm z-10">
           <div className="text-center">
             <div className="text-2xl mb-2">📱</div>
-            <p className="font-medium">MindAR 전용 뷰어 완료</p>
-            <p className="text-xs opacity-75 mt-1">데스크톱 로직 완전 제거 + AR 전용 최적화</p>
             <p className="text-xs text-green-400 mt-1">✅ AR 전용 모드 - 카메라로 마커를 스캔하세요</p>
-            <p className="text-xs opacity-50 mt-2">
-              마커: 
-              <a 
-                href="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="underline text-blue-300 ml-1"
-              >
-                여기서 다운로드
-              </a>
-            </p>
           </div>
         </div>
       )}
