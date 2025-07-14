@@ -18,7 +18,7 @@ export default function DesktopViewer({
   onLoadComplete, 
   onLoadError,
   autoRotate = true,
-  rotationSpeed = 0.002
+  rotationSpeed = 0.05
 }: DesktopViewerProps) {
   const [status, setStatus] = useState<'loading' | 'active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
