@@ -297,44 +297,36 @@ export default function ARViewer({
   };
 
   // 🎯 MindAR 공식 문서 방식: Import Map + Module Script 동적 삽입
-  const loadMindARScripts = async (): Promise<void> => {
+  const loadMindARScripts = async (): Promise<void> => {    
+    // 🔍 window 객체에 모듈이 이미 로드되었는지 먼저 확인
+    if (window.MindAR_THREE && window.MindAR_MindARThree) {
+      console.log('✅ MindAR 모듈이 이미 로드되어 있습니다. (캐시됨)');
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       try {
         console.log('📦 MindAR 공식 방식: Import Map + Module Script 삽입 시작');
         setDebugInfo('Import Map 설정 중...');
         
-        // 1. Import Map 동적 생성 (공식 문서 방식)
-        const importMap = document.createElement('script');
-        importMap.type = 'importmap';
-        importMap.textContent = JSON.stringify({
-          "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-            "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
-          }
-        });
+        // 1. Import Map 중복 삽입 방지
+        if (!document.querySelector('script[type="importmap"]')) {
+          const importMap = document.createElement('script');
+          importMap.type = 'importmap';
+          importMap.textContent = JSON.stringify({
+            "imports": {
+              "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+              "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+              "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+            }
+          });
+          document.head.appendChild(importMap);
+          console.log('✅ Import Map 삽입 완료');
+        } else {
+          console.log('ℹ️ Import Map이 이미 존재합니다. (스킵)');
+        }
         
-        document.head.appendChild(importMap);
-        console.log('✅ Import Map 삽입 완료');
         setDebugInfo('Module Script 로딩 중...');
-        
-        // 2. Module Script 동적 생성 (공식 문서 방식)
-        const moduleScript = document.createElement('script');
-        moduleScript.type = 'module';
-        moduleScript.textContent = `
-          // MindAR 모듈 import (공식 방식)
-          import * as THREE from 'three';
-          import { MindARThree } from 'mindar-image-three';
-          
-          // 전역 객체에 할당하여 React에서 접근 가능하게 함
-          window.MindAR_THREE = THREE;
-          window.MindAR_MindARThree = MindARThree;
-          
-          // 로딩 완료 이벤트 발생
-          window.dispatchEvent(new CustomEvent('mindARModulesLoaded'));
-          
-          console.log('✅ MindAR 모듈 로드 완료 (공식 Import Map 방식)');
-        `;
         
         // 3. 로딩 완료 이벤트 리스너 등록
         const handleModulesLoaded = () => {
@@ -343,20 +335,20 @@ export default function ARViewer({
           window.removeEventListener('mindARModulesLoaded', handleModulesLoaded);
           resolve();
         };
+        window.addEventListener('mindARModulesLoaded', handleModulesLoaded, { once: true });
         
-        window.addEventListener('mindARModulesLoaded', handleModulesLoaded);
-        
-        // 4. 에러 처리
-        moduleScript.onerror = () => {
-          console.error('❌ Module Script 로드 실패');
-          window.removeEventListener('mindARModulesLoaded', handleModulesLoaded);
-          reject(new Error('Module Script 로드 실패'));
-        };
-        
-        // 5. DOM에 Module Script 추가
-        document.head.appendChild(moduleScript);
-        
-        console.log('📦 Import Map + Module Script 삽입 완료 - 로딩 대기 중...');
+        // 2. Module Script 중복 삽입 방지
+        if (!document.getElementById('mindar-module-script')) {
+          const moduleScript = document.createElement('script');
+          moduleScript.id = 'mindar-module-script';
+          moduleScript.type = 'module';
+          moduleScript.textContent = `import * as THREE from 'three'; import { MindARThree } from 'mindar-image-three'; window.MindAR_THREE = THREE; window.MindAR_MindARThree = MindARThree; window.dispatchEvent(new CustomEvent('mindARModulesLoaded')); console.log('✅ MindAR 모듈 로드 완료 (공식 Import Map 방식)');`;
+          moduleScript.onerror = () => reject(new Error('Module Script 로드 실패'));
+          document.head.appendChild(moduleScript);
+          console.log('📦 Module Script 삽입 완료 - 로딩 대기 중...');
+        } else {
+          console.log('ℹ️ Module Script가 이미 존재합니다. 로딩 완료 이벤트를 기다립니다.');
+        }
         
       } catch (error) {
         console.error('❌ Import Map 방식 스크립트 삽입 실패:', error);
@@ -626,15 +618,6 @@ export default function ARViewer({
                     if (granted) {
                       console.log('✅ 카메라 권한 허용됨 - AR 초기화 시작');
                       setDebugInfo('카메라 권한 허용됨! AR 초기화 중...');
-                      
-                      // 🔧 React 상태 업데이트 완료까지 대기 (중요!)
-                      console.log('⏳ React 상태 업데이트 대기 중...');
-                      await new Promise(resolve => setTimeout(resolve, 200));
-                      
-                      // 🔧 상태 강제 업데이트 확인
-                      console.log('🔍 상태 업데이트 후 카메라 권한 상태:', cameraPermission);
-                      
-                      // 🔧 권한 상태 직접 전달하는 방식으로 변경
                       await startMindARWithPermission(true);
                     } else {
                       console.log('❌ 카메라 권한 거부됨 - 3D 모드로 대체');
