@@ -1,12 +1,13 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import DesktopViewer from '@/components/DesktopViewer';
 import ARViewer from '@/components/ARViewer';
 
 export default function ARViewerPage() {
   const params = useParams();
+  const router = useRouter();
   const artworkId = params.id;
   
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
@@ -86,6 +87,21 @@ export default function ARViewerPage() {
     setCameraPermission(null);
   };
 
+  // 🔧 뒤로가기 핸들러 (AR에서 선택화면으로)
+  const handleBackFromAR = () => {
+    console.log('🔙 AR에서 뒤로가기');
+    setUserChoice(null);
+    setCameraPermission(null);
+    setShowARErrorPopup(false);
+    setArErrorMessage('');
+  };
+
+  // 🔧 완전히 뒤로가기 (홈페이지로)
+  const handleBackToHome = () => {
+    console.log('🏠 홈페이지로 이동');
+    router.push('/');
+  };
+
   // 🎯 명확한 조건 분리
   const shouldRenderDesktopViewer = deviceType === 'desktop';
   const shouldRenderARViewer = deviceType === 'mobile' && 
@@ -118,9 +134,21 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🔧 PC: 순수 DesktopViewer 렌더링 (AR 코드 완전 제거) */}
+      {/* 🔧 PC: 순수 DesktopViewer 렌더링 + 뒤로가기 버튼 */}
       {shouldRenderDesktopViewer && (
-        <div className="w-full h-full">
+        <div className="w-full h-full relative">
+          {/* 뒤로가기 버튼 */}
+          <button
+            onClick={handleBackToHome}
+            className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors"
+            aria-label="홈으로 돌아가기"
+          >
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          </button>
+          
+          {/* 🔧 DesktopViewer에서 deviceType prop 제거 */}
           <DesktopViewer
             modelPath="/sample.glb"
             onLoadComplete={() => {
@@ -135,9 +163,20 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🔧 모바일: 사용자 선택 UI */}
+      {/* 🔧 모바일: 사용자 선택 UI + 뒤로가기 버튼 */}
       {deviceType === 'mobile' && !userChoice && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
+          {/* 뒤로가기 버튼 */}
+          <button
+            onClick={handleBackToHome}
+            className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-30 transition-colors"
+            aria-label="홈으로 돌아가기"
+          >
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          </button>
+
           <div className="text-center p-6 max-w-sm">
             <div className="text-6xl mb-4">📱✨</div>
             <p className="text-lg font-medium mb-2">어떻게 작품을 감상하시겠습니까?</p>
@@ -192,10 +231,7 @@ export default function ARViewerPage() {
             <p className="text-lg font-medium">카메라 권한 확인 중...</p>
             <p className="text-sm opacity-50 mt-2">{debugInfo}</p>
             <button 
-              onClick={() => {
-                setUserChoice(null);
-                setCameraPermission(null);
-              }}
+              onClick={handleBackFromAR}
               className="mt-4 bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded transition-colors"
             >
               취소
@@ -221,10 +257,7 @@ export default function ARViewerPage() {
                 다시 시도
               </button>
               <button 
-                onClick={() => {
-                  setUserChoice(null);
-                  setCameraPermission(null);
-                }}
+                onClick={handleBackFromAR}
                 className="w-full bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded transition-colors"
               >
                 뒤로가기
@@ -266,6 +299,7 @@ export default function ARViewerPage() {
                   onClick={() => {
                     setShowARErrorPopup(false);
                     setArErrorMessage('');
+                    handleBackFromAR();
                   }}
                   className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
                 >
@@ -293,14 +327,27 @@ export default function ARViewerPage() {
               console.log('✅ 모바일 AR (MindAR) 로딩 완료');
             }}
             onLoadError={handleARError}
+            onBackPressed={handleBackFromAR}
             autoRotate={false}
           />
         </div>
       )}
 
-      {/* 🎯 모바일에서 3D 선택시 DesktopViewer 렌더링 */}
+      {/* 🎯 모바일에서 3D 선택시 DesktopViewer 렌더링 + 뒤로가기 */}
       {shouldRenderMobileDesktopViewer && (
-        <div className="w-full h-full">
+        <div className="w-full h-full relative">
+          {/* 뒤로가기 버튼 */}
+          <button
+            onClick={handleBackFromAR}
+            className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors"
+            aria-label="뒤로가기"
+          >
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          {/* 🔧 DesktopViewer에서 deviceType prop 제거 */}
           <DesktopViewer
             modelPath="/sample.glb"
             onLoadComplete={() => {
