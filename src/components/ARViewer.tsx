@@ -14,7 +14,6 @@ declare global {
   }
 }
 
-// 컴포넌트가 받을 props 정의
 interface ARViewerProps {
   modelPath: string;
   deviceType: 'mobile' | 'desktop';
@@ -41,68 +40,74 @@ export default function ARViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const mindarInstanceRef = useRef<MindARThreeInstance | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const markerFoundRef = useRef(false);
   const initializationRef = useRef(false);
+  const cleanupRef = useRef(false);
+  const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
 
   const SCRIPT_ID_IMPORT_MAP = 'mindar-import-map';
   const SCRIPT_ID_MODULE = 'mindar-module-script';
 
-  // 스크립트 로딩 함수
   const ensureMindARScriptsLoaded = useCallback(async (): Promise<void> => {
     return new Promise((resolve, reject) => {
-        if (window.MindAR_THREE && window.MindAR_MindARThree) {
-          return resolve();
-        }
-        document.getElementById(SCRIPT_ID_IMPORT_MAP)?.remove();
-        document.getElementById(SCRIPT_ID_MODULE)?.remove();
-        const importMap = document.createElement('script');
-        importMap.id = SCRIPT_ID_IMPORT_MAP;
-        importMap.type = 'importmap';
-        importMap.textContent = JSON.stringify({
-          "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/", "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" }
-        });
-        document.head.appendChild(importMap);
-        const moduleScript = document.createElement('script');
-        moduleScript.id = SCRIPT_ID_MODULE;
-        moduleScript.type = 'module';
-        moduleScript.textContent = `
-          try {
-            const THREE_module = await import('three');
-            const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-            const { MindARThree } = await import('mindar-image-three');
-            window.MindAR_THREE = THREE_module;
-            window.MindAR_MindARThree = MindARThree;
-            window.MindAR_GLTFLoader = GLTFLoader;
-            window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: true } }));
+        try {
+            if (window.MindAR_THREE && window.MindAR_MindARThree) {
+              return resolve();
+            }
+            document.getElementById(SCRIPT_ID_IMPORT_MAP)?.remove();
+            document.getElementById(SCRIPT_ID_MODULE)?.remove();
+            const importMap = document.createElement('script');
+            importMap.id = SCRIPT_ID_IMPORT_MAP;
+            importMap.type = 'importmap';
+            importMap.textContent = JSON.stringify({
+              "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/", "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" }
+            });
+            document.head.appendChild(importMap);
+            const moduleScript = document.createElement('script');
+            moduleScript.id = SCRIPT_ID_MODULE;
+            moduleScript.type = 'module';
+            moduleScript.textContent = `
+              try {
+                const THREE_module = await import('three');
+                const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+                const { MindARThree } = await import('mindar-image-three');
+                window.MindAR_THREE = THREE_module;
+                window.MindAR_MindARThree = MindARThree;
+                window.MindAR_GLTFLoader = GLTFLoader;
+                window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: true } }));
+              } catch (error) {
+                window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: false, error: error.message } }));
+              }
+            `;
+            // ✨ 1. 'e' is defined but never used 오류 해결
+            const handleReady = (_e: Event) => {
+              const customEvent = _e as CustomEvent;
+              window.removeEventListener('mindARReady', handleReady);
+              clearTimeout(timeout);
+              if (customEvent.detail.success) resolve();
+              else reject(new Error(customEvent.detail.error));
+            };
+            window.addEventListener('mindARReady', handleReady);
+            const timeout = setTimeout(() => reject(new Error('MindAR 스크립트 로딩 타임아웃')), 15000);
+            document.head.appendChild(moduleScript);
           } catch (error) {
-            window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: false, error: error.message } }));
+            reject(error);
           }
-        `;
-        const handleReady = (e: Event) => {
-          const customEvent = e as CustomEvent;
-          window.removeEventListener('mindARReady', handleReady);
-          clearTimeout(timeout);
-          if (customEvent.detail.success) resolve();
-          else reject(new Error(customEvent.detail.error));
-        };
-        window.addEventListener('mindARReady', handleReady);
-        const timeout = setTimeout(() => reject(new Error('MindAR 스크립트 로딩 타임아웃')), 15000);
-        document.head.appendChild(moduleScript);
     });
   }, [SCRIPT_ID_IMPORT_MAP, SCRIPT_ID_MODULE]);
 
-  // 모델 로딩 함수
   const loadModelForMindAR = useCallback(async (anchorGroup: THREE.Group): Promise<void> => {
     const GLTFLoader = window.MindAR_GLTFLoader;
     if (!GLTFLoader) throw new Error('GLTFLoader를 window에서 찾을 수 없습니다.');
     const loader = new GLTFLoader();
     try {
-        const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
-        const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
-        loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
-        setThreeIcosaStatus('success');
-    } catch (e) {
-        setThreeIcosaStatus('fallback');
-        console.warn("three-icosa 확장 로드 실패:", e);
+      const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
+      const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+      loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
+      setThreeIcosaStatus('success');
+    } catch {
+      setThreeIcosaStatus('fallback');
+      console.warn("three-icosa 확장 로드 실패. 기본 재질로 렌더링됩니다.");
     }
     const gltf: GLTF = await loader.loadAsync(modelPath, progress => {
         if (progress.total > 0) {
@@ -117,15 +122,15 @@ export default function ARViewer({
     const size = box.getSize(new THREE.Vector3());
     model.position.sub(center);
     const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 1.0 / maxDim;
+    const scaleMultiplier = 1.5; // 1.0이 기준, 1.5는 1.5배 크게
+    const scale = scaleMultiplier / maxDim;
     model.scale.setScalar(scale);
     model.position.y += (size.y * scale) / 2;
     anchorGroup.add(model);
   }, [modelPath]);
 
-  // AR 세션 초기화 함수
   const initializeMindARSession = useCallback(async () => {
-    let markerFound = false;
+    markerFoundRef.current = false;
     await ensureMindARScriptsLoaded();
     const MindARThree = window.MindAR_MindARThree;
     if (!containerRef.current || !MindARThree) throw new Error("MindAR 초기화 준비 안됨");
@@ -137,7 +142,7 @@ export default function ARViewer({
     const { renderer, scene, camera } = mindarThree;
     const anchor = mindarThree.addAnchor(0);
     anchor.onTargetFound = () => {
-      markerFound = true;
+      markerFoundRef.current = true;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setDebugInfo('🎯 마커 인식 성공!');
     };
@@ -145,7 +150,7 @@ export default function ARViewer({
     await loadModelForMindAR(anchor.group);
     await mindarThree.start();
     timeoutRef.current = setTimeout(() => {
-      if (!markerFound) {
+      if (!markerFoundRef.current) {
         mindarInstanceRef.current?.stop();
         setShowTimeoutPopup(true);
       }
@@ -153,10 +158,8 @@ export default function ARViewer({
     renderer.setAnimationLoop(() => renderer.render(scene, camera));
   }, [ensureMindARScriptsLoaded, loadModelForMindAR]);
 
-  // 스캔 재시도 함수
   const handleRetryScan = useCallback(() => {
     setShowTimeoutPopup(false);
-    setDebugInfo('AR 스캔 재시도...');
     initializeMindARSession().catch(error => {
       const errorMsg = error instanceof Error ? error.message : String(error);
       setErrorMessage(errorMsg);
@@ -165,7 +168,6 @@ export default function ARViewer({
     });
   }, [initializeMindARSession, onLoadError]);
   
-  // 메인 초기화 함수
   const initializeMobileAR = useCallback(async () => {
     try {
       await initializeMindARSession();
@@ -179,18 +181,20 @@ export default function ARViewer({
     }
   }, [initializeMindARSession, onLoadComplete, onLoadError]);
 
-  // 컴포넌트 생명주기 관리
   useEffect(() => {
     if (deviceType !== 'mobile' || !containerRef.current || initializationRef.current) {
       return;
     }
     initializationRef.current = true;
+    // ✨ 2. useEffect 경고 해결
     const currentContainer = containerRef.current;
+    const currentRenderId = renderIdRef.current;
+    console.log(`✅ ARViewer 초기화 시작 [${currentRenderId}]`);
     
     initializeMobileAR();
 
     return () => {
-      console.log(`🧹 ARViewer 완벽 정리 시작`);
+      console.log(`🧹 ARViewer 완벽 정리 시작 [${currentRenderId}]`);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -218,10 +222,12 @@ export default function ARViewer({
       if (window.MindAR_MindARThree) window.MindAR_MindARThree = undefined;
       if (window.MindAR_GLTFLoader) window.MindAR_GLTFLoader = undefined;
 
+      // ✨ 2. useEffect 경고 해결
       if (currentContainer) {
         currentContainer.innerHTML = '';
       }
       initializationRef.current = false;
+      cleanupRef.current = true;
     };
   }, [deviceType, initializeMobileAR, SCRIPT_ID_IMPORT_MAP, SCRIPT_ID_MODULE]);
 
