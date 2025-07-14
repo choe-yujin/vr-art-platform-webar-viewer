@@ -113,11 +113,10 @@ export default function ARViewer({
             const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
             const { MindARThree } = await import('mindar-image-three');
             
-            // GLTFLoader를 THREE 객체에 추가
-            THREE.GLTFLoader = GLTFLoader;
-            
             window.MindAR_THREE = THREE;
             window.MindAR_MindARThree = MindARThree;
+            // GLTFLoader를 별도 전역 변수로 전달하여 THREE 객체 확장 방지
+            window.MindAR_GLTFLoader = GLTFLoader;
             
             console.log('✅ MindAR 모듈 로드 완료');
             
@@ -183,15 +182,14 @@ export default function ARViewer({
   const loadModelForMindAR = useCallback(async (anchorGroup: any, THREE: any): Promise<void> => {
     try {
       console.log('🎨 MindAR 모델 로딩 시작');
-      
-      // GLTFLoader 생성 - 안전한 방식으로 접근
-      let loader;
-      if (THREE.GLTFLoader) {
-        loader = new THREE.GLTFLoader();
-      } else {
-        console.error('❌ GLTFLoader를 찾을 수 없음');
+
+      // GLTFLoader 생성 - 전역에서 가져와 사용
+      const GLTFLoader = (window as any).MindAR_GLTFLoader;
+      if (!GLTFLoader) {
+        console.error('❌ GLTFLoader를 window에서 찾을 수 없습니다.');
         throw new Error('GLTFLoader를 사용할 수 없습니다');
       }
+      const loader = new GLTFLoader();
       
       let threeIcosaLoaded = false;
       
