@@ -36,14 +36,14 @@ export default function ARViewer({
   const [debugInfo, setDebugInfo] = useState<string>('AR 초기화 중...');
   const [threeIcosaStatus, setThreeIcosaStatus] = useState<'loading' | 'success' | 'fallback'>('loading');
   const [showTimeoutPopup, setShowTimeoutPopup] = useState(false);
-  const [isScanning, setIsScanning] = useState(true); // 🔧 스캔 상태 추가
+  const [isScanning, setIsScanning] = useState<boolean>(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mindarInstanceRef = useRef<MindARThreeInstance | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const rescanTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 🔧 재스캔 타이머 추가
+  const rescanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const markerFoundRef = useRef(false);
-  const markerLostTimeRef = useRef<number | null>(null); // 🔧 마커 손실 시간 추적
+  const markerLostTimeRef = useRef<number | null>(null);
   const initializationRef = useRef(false);
   const cleanupRef = useRef(false);
   const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
@@ -51,92 +51,53 @@ export default function ARViewer({
   const SCRIPT_ID_IMPORT_MAP = 'mindar-import-map';
   const SCRIPT_ID_MODULE = 'mindar-module-script';
 
-  // 🔧 이슈 1: MindAR 스크립트 로딩 개선 (ESLint 경고 없음, any 타입 금지)
   const ensureMindARScriptsLoaded = useCallback(async (): Promise<void> => {
     return new Promise((resolve, reject) => {
-      try {
-        // 이미 로드된 경우 즉시 반환
-        if (window.MindAR_THREE && window.MindAR_MindARThree) {
-          console.log('📦 MindAR 스크립트 이미 로드됨');
-          setDebugInfo('MindAR 모듈 이미 준비됨!');
-          resolve();
-          return;
-        }
-
-        // 기존 스크립트 정리
-        document.getElementById(SCRIPT_ID_IMPORT_MAP)?.remove();
-        document.getElementById(SCRIPT_ID_MODULE)?.remove();
-
-        // Import Map 생성
-        const importMap = document.createElement('script');
-        importMap.id = SCRIPT_ID_IMPORT_MAP;
-        importMap.type = 'importmap';
-        importMap.textContent = JSON.stringify({
-          "imports": {
-            "three": "https://unpkg.com/three@0.164.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.164.0/examples/jsm/",
-            "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
-          }
-        });
-        document.head.appendChild(importMap);
-
-        // Module Script 생성
-        const moduleScript = document.createElement('script');
-        moduleScript.id = SCRIPT_ID_MODULE;
-        moduleScript.type = 'module';
-        moduleScript.textContent = `
-          try {
-            const THREE_module = await import('three');
-            const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-            const { MindARThree } = await import('mindar-image-three');
-            window.MindAR_THREE = THREE_module;
-            window.MindAR_MindARThree = MindARThree;
-            window.MindAR_GLTFLoader = GLTFLoader;
-            window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: true } }));
+        try {
+            if (window.MindAR_THREE && window.MindAR_MindARThree) {
+              return resolve();
+            }
+            document.getElementById(SCRIPT_ID_IMPORT_MAP)?.remove();
+            document.getElementById(SCRIPT_ID_MODULE)?.remove();
+            const importMap = document.createElement('script');
+            importMap.id = SCRIPT_ID_IMPORT_MAP;
+            importMap.type = 'importmap';
+            importMap.textContent = JSON.stringify({
+              "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/", "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" }
+            });
+            document.head.appendChild(importMap);
+            const moduleScript = document.createElement('script');
+            moduleScript.id = SCRIPT_ID_MODULE;
+            moduleScript.type = 'module';
+            moduleScript.textContent = `
+              try {
+                const THREE_module = await import('three');
+                const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+                const { MindARThree } = await import('mindar-image-three');
+                window.MindAR_THREE = THREE_module;
+                window.MindAR_MindARThree = MindARThree;
+                window.MindAR_GLTFLoader = GLTFLoader;
+                window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: true } }));
+              } catch (error) {
+                window.dispatchEvent(new CustomEvent('mindARReady', { detail: { success: false, error: error.message } }));
+              }
+            `;
+            const handleReady = (_e: Event) => {
+              const customEvent = _e as CustomEvent;
+              window.removeEventListener('mindARReady', handleReady);
+              clearTimeout(timeout);
+              if (customEvent.detail.success) resolve();
+              else reject(new Error(customEvent.detail.error));
+            };
+            window.addEventListener('mindARReady', handleReady);
+            const timeout = setTimeout(() => reject(new Error('MindAR 스크립트 로딩 타임아웃')), 15000);
+            document.head.appendChild(moduleScript);
           } catch (error) {
-            window.dispatchEvent(new CustomEvent('mindARReady', { 
-              detail: { success: false, error: error.message } 
-            }));
+            reject(error);
           }
-        `;
-
-        // 이벤트 리스너 설정 (타입 안전)
-        const handleReady = (event: Event) => {
-          const customEvent = event as CustomEvent<{ success: boolean; error?: string }>;
-          window.removeEventListener('mindARReady', handleReady);
-          clearTimeout(timeout);
-          
-          if (customEvent.detail.success) {
-            setDebugInfo('MindAR 모듈 로드 성공!');
-            resolve();
-          } else {
-            const errorMsg = customEvent.detail.error || '알 수 없는 오류';
-            setDebugInfo(`MindAR 로딩 실패: ${errorMsg}`);
-            reject(new Error(errorMsg));
-          }
-        };
-
-        window.addEventListener('mindARReady', handleReady);
-
-        // 타임아웃 설정
-        const timeout = setTimeout(() => {
-          console.error('❌ MindAR 스크립트 로딩 타임아웃');
-          window.removeEventListener('mindARReady', handleReady);
-          setDebugInfo('MindAR 로딩 타임아웃');
-          reject(new Error('MindAR 스크립트 로딩 타임아웃'));
-        }, 30000);
-
-        document.head.appendChild(moduleScript);
-      } catch (error) {
-        console.error('❌ MindAR 스크립트 삽입 실패:', error);
-        const errorMsg = error instanceof Error ? error.message : '알 수 없는 오류';
-        setDebugInfo(`스크립트 삽입 실패: ${errorMsg}`);
-        reject(new Error(errorMsg));
-      }
     });
   }, [SCRIPT_ID_IMPORT_MAP, SCRIPT_ID_MODULE]);
 
-  // 기존 방식으로 간단하게 수정
   const loadModelForMindAR = useCallback(async (anchorGroup: THREE.Group): Promise<void> => {
     const GLTFLoader = window.MindAR_GLTFLoader;
     if (!GLTFLoader) {
@@ -146,10 +107,11 @@ export default function ARViewer({
     const loader = new GLTFLoader();
     let threeIcosaLoaded = false;
 
-    // Three-Icosa 로딩 시도 (기존 방식)
+    // 별도의 상태 처리 없이 매번 새로 등록
     try {
       const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
       const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+      // 매번 새로운 로더에 확장자 등록
       loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
       threeIcosaLoaded = true;
       setThreeIcosaStatus('success');
@@ -157,6 +119,7 @@ export default function ARViewer({
     } catch (error) {
       console.warn('⚠️ Three-Icosa 로드 실패:', error);
       setThreeIcosaStatus('fallback');
+      threeIcosaLoaded = false;
     }
 
     // 🎯 모델 로딩 (Tilt Brush 지원 여부와 관계없이 동작)
@@ -212,100 +175,57 @@ export default function ARViewer({
     });
   }, [modelPath]);
 
-  // 🔧 이슈 2: 마커 추적 및 팝업 관리 개선
-  const initializeMindARSession = useCallback(async (): Promise<void> => {
-    try {
-      console.log('🚀 MindAR 세션 초기화 시작');
-      setDebugInfo('MindAR 인스턴스 생성 중...');
-      
-      markerFoundRef.current = false;
+  const initializeMindARSession = useCallback(async () => {
+    markerFoundRef.current = false;
+    await ensureMindARScriptsLoaded();
+    const MindARThree = window.MindAR_MindARThree;
+    if (!containerRef.current || !MindARThree) throw new Error("MindAR 초기화 준비 안됨");
+    const mindarThree = new MindARThree({
+      container: containerRef.current,
+      imageTargetSrc: '/markers/qr-marker.mind',
+    });
+    mindarInstanceRef.current = mindarThree;
+    const { renderer, scene, camera } = mindarThree;
+    const anchor = mindarThree.addAnchor(0);
+    anchor.onTargetFound = () => {
+      markerFoundRef.current = true;
+      setIsScanning(false);
       markerLostTimeRef.current = null;
       
-      await ensureMindARScriptsLoaded();
-      
-      const MindARThree = window.MindAR_MindARThree;
-      if (!containerRef.current || !MindARThree) {
-        throw new Error('MindAR 초기화 준비 안됨');
+      // 모든 타이머 정리
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
-
-      const mindarThree = new MindARThree({
-        container: containerRef.current,
-        imageTargetSrc: '/markers/qr-marker.mind',
-      });
-
-      mindarInstanceRef.current = mindarThree;
-      const { renderer, scene, camera } = mindarThree;
+      if (rescanTimeoutRef.current) {
+        clearTimeout(rescanTimeoutRef.current);
+        rescanTimeoutRef.current = null;
+      }
       
-      // 🔧 카메라 뷰 전체 화면 사용 (이슈 5 해결)
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.domElement.style.width = '100%';
-      renderer.domElement.style.height = '100%';
-      renderer.domElement.style.objectFit = 'cover';
+      setDebugInfo('🎯 마커 인식 성공!');
+    };
+    
+    anchor.onTargetLost = () => {
+      setIsScanning(true);
+      markerLostTimeRef.current = Date.now();
+      setDebugInfo('마커를 다시 스캔해주세요...');
       
-      const anchor = mindarThree.addAnchor(0);
-      
-      // 🔧 마커 추적 이벤트 개선
-      anchor.onTargetFound = () => {
-        console.log('🎯 마커 발견!');
-        markerFoundRef.current = true;
-        markerLostTimeRef.current = null;
-        setIsScanning(false); // 스캔 중지
-        
-        // 타임아웃 정리
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        if (rescanTimeoutRef.current) {
-          clearTimeout(rescanTimeoutRef.current);
-          rescanTimeoutRef.current = null;
-        }
-        
-        setDebugInfo('🎯 마커 인식 성공! 3D 모델 표시 중...');
-        setShowTimeoutPopup(false);
-      };
-      
-      anchor.onTargetLost = () => {
-        console.log('❌ 마커 손실');
-        markerFoundRef.current = false;
-        markerLostTimeRef.current = Date.now();
-        setIsScanning(true); // 스캔 재시작
-        setDebugInfo('마커를 다시 스캔해주세요...');
-        
-        // 5초 후 재스캔 팝업 표시
-        rescanTimeoutRef.current = setTimeout(() => {
-          if (!markerFoundRef.current && markerLostTimeRef.current) {
-            setShowTimeoutPopup(true);
-            setIsScanning(false); // 팝업 표시 시 스캔 중지
-          }
-        }, 5000);
-      };
-
-      await loadModelForMindAR(anchor.group);
-
-      console.log('🎯 MindAR 세션 시작 중...');
-      setDebugInfo('AR 세션 시작 중...');
-      
-      await mindarThree.start();
-      
-      // 🔧 10초 후 마커 못 찾음 팝업 (초기 스캔)
-      timeoutRef.current = setTimeout(() => {
-        if (!markerFoundRef.current) {
+      // 마커를 잃은 후 일정 시간이 지나면 팝업 표시
+      rescanTimeoutRef.current = setTimeout(() => {
+        if (markerLostTimeRef.current && Date.now() - markerLostTimeRef.current > 3000) {
           setShowTimeoutPopup(true);
-          setIsScanning(false); // 팝업 표시 시 스캔 중지
         }
-      }, 10000);
-
-      // 렌더링 루프
-      renderer.setAnimationLoop(() => {
-        renderer.render(scene, camera);
-      });
-
-      console.log('🎉 MindAR 세션 초기화 완료');
-    } catch (error) {
-      console.error('❌ MindAR 세션 초기화 실패:', error);
-      throw error;
-    }
+      }, 3000);
+    };
+    await loadModelForMindAR(anchor.group);
+    await mindarThree.start();
+    // 초기 마커 찾기 타임아웃 (5초)
+    timeoutRef.current = setTimeout(() => {
+      if (!markerFoundRef.current) {
+        setShowTimeoutPopup(true);
+      }
+    }, 5000);
+    renderer.setAnimationLoop(() => renderer.render(scene, camera));
   }, [ensureMindARScriptsLoaded, loadModelForMindAR]);
 
   // 🔧 이슈 3: 뒤로가기 버튼 개선
@@ -349,7 +269,7 @@ export default function ARViewer({
     markerFoundRef.current = false;
     markerLostTimeRef.current = null;
     
-    // 타이머 정리
+    // 모든 타이머 정리
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
@@ -359,16 +279,15 @@ export default function ARViewer({
       rescanTimeoutRef.current = null;
     }
     
-    // MindAR 세션 재시작
-    initializeMindARSession().catch((error: Error) => {
-      const errorMsg = error.message;
-      setErrorMessage(errorMsg);
-      setStatus('error');
-      if (onLoadError) {
-        onLoadError(errorMsg);
+    // 새로운 마커 찾기 타임아웃 설정
+    timeoutRef.current = setTimeout(() => {
+      if (!markerFoundRef.current) {
+        setShowTimeoutPopup(true);
       }
-    });
-  }, [initializeMindARSession, onLoadError]);
+    }, 5000);
+    
+    setDebugInfo('마커를 스캔해주세요...');
+  }, []);
 
   // 🔧 이슈 5: 컴포넌트 생명주기 개선
   const initializeMobileAR = useCallback(async (): Promise<void> => {
