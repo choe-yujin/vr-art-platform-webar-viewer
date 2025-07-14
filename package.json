@@ -11,12 +11,12 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@types/three": "^0.157.0",
+    "@types/three": "0.164.0",
     "next": "15.3.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-webcam": "^7.2.0",
-    "three": "^0.157.0",
+    "three": "0.164.0",
     "three-icosa": "^0.4.2-alpha.18"
   },
   "devDependencies": {
