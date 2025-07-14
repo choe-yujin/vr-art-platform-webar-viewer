@@ -23,6 +23,7 @@ export default function DesktopViewer({
   const [status, setStatus] = useState<'loading' | 'active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('3D 뷰어 초기화 중...');
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
   
   // 🔧 배포용 상태 추가
   const [showPromoHeader, setShowPromoHeader] = useState<boolean>(true);
@@ -35,6 +36,12 @@ export default function DesktopViewer({
   const cleanupRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  
+  // 🔧 진행률 추적 refs 수정 (547% 문제 해결)
+  const mainModelLoadedRef = useRef(false);
+  const progressClampedRef = useRef(false);
+  const totalProgressEventsRef = useRef(0); // 🆕 전체 progress 이벤트 수 추적
+  const completedProgressEventsRef = useRef(0); // 🆕 완료된 progress 이벤트 수 추적
   
   // Three-Icosa 상태 (재렌더링 방지)
   const threeIcosaStateRef = useRef({
@@ -86,10 +93,24 @@ export default function DesktopViewer({
       return new Promise((resolve, reject) => {
         setDebugInfo(`${threeIcosaLoaded ? 'Tilt Brush' : '기본'} 모델 로딩 중...`);
         
+        // 🔧 진행률 추적 초기화
+        mainModelLoadedRef.current = false;
+        progressClampedRef.current = false;
+        totalProgressEventsRef.current = 0;
+        completedProgressEventsRef.current = 0;
+        
         loader.load(
           modelPath,
           (gltf) => {
             console.log('🎉 순수 3D 모델 로딩 성공!');
+            
+            // 🔧 메인 모델 로딩 완료 표시 (100%로 고정)
+            mainModelLoadedRef.current = true;
+            if (!progressClampedRef.current) {
+              setLoadingProgress(100);
+              progressClampedRef.current = true;
+              console.log('📊 진행률을 100%로 고정 (추가 에셋 로딩 무시)');
+            }
             
             scene.add(gltf.scene);
             
@@ -115,12 +136,32 @@ export default function DesktopViewer({
             
             console.log('✅ 순수 3D 모델이 씬에 추가됨');
             setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(Tilt Brush)' : '(기본)'}`);
+            
             resolve(gltf);
           },
           (progress) => {
-            if (progress.total > 0) {
-              const percent = Math.round((progress.loaded / progress.total) * 100);
+            // 🔧 547% 문제 해결: 메인 모델만 진행률 추적
+            if (progress.total > 0 && !mainModelLoadedRef.current && !progressClampedRef.current) {
+              const percent = Math.min(100, Math.round((progress.loaded / progress.total) * 100));
+              setLoadingProgress(percent);
               setDebugInfo(`모델 로딩... ${percent}%`);
+              
+              // 🔧 메인 모델 로딩 진행률만 로그
+              console.log(`📊 메인 모델 로딩: ${percent}% (${progress.loaded}/${progress.total} bytes)`);
+              
+              // 🔧 100% 도달 시 추가 progress 이벤트 무시 설정
+              if (percent >= 100) {
+                progressClampedRef.current = true;
+                console.log('🔒 메인 모델 100% 완료 - 추가 progress 이벤트 무시');
+              }
+            } else if (progressClampedRef.current) {
+              // 🔧 Three-Icosa 브러시 에셋 로딩은 진행률에 반영하지 않음
+              totalProgressEventsRef.current++;
+              if (progress.loaded >= progress.total) {
+                completedProgressEventsRef.current++;
+              }
+              
+              console.log(`🎨 브러시 에셋 로딩 (진행률 무시): ${completedProgressEventsRef.current}/${totalProgressEventsRef.current} 완료`);
             }
           },
           (loadError) => {
@@ -142,6 +183,7 @@ export default function DesktopViewer({
     try {
       console.log('🖥️ 순수 3D 뷰어 초기화 시작');
       setDebugInfo('3D 씬 초기화 중...');
+      setLoadingProgress(5);
       
       if (!containerRef.current) {
         throw new Error('Container not found');
@@ -178,11 +220,16 @@ export default function DesktopViewer({
 
       console.log('✅ 순수 3D 씬 초기화 완료');
       setDebugInfo('3D 모델 로딩 중...');
+      setLoadingProgress(10);
 
       await loadModelForDesktop(scene, camera, controls);
 
       setStatus('active');
       setDebugInfo('순수 3D 뷰어 완료!');
+      // 🔧 최종 완료 시에도 100% 유지 (547% 방지)
+      if (loadingProgress <= 100) {
+        setLoadingProgress(100);
+      }
       onLoadComplete?.();
 
       const animate = () => {
@@ -205,11 +252,11 @@ export default function DesktopViewer({
       console.error('❌ 순수 3D 뷰어 초기화 실패:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
       setErrorMessage(errorMsg);
-setStatus('error');
+      setStatus('error');
       setDebugInfo(`3D 뷰어 오류: ${errorMsg}`);
       onLoadError?.(errorMsg);
     }
-  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError]);
+  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError, loadingProgress]);
 
   useEffect(() => {
     if (!containerRef.current || initializationRef.current || cleanupRef.current) {
@@ -219,7 +266,6 @@ setStatus('error');
     console.log(`✅ DesktopViewer 초기화 시작 [${renderIdRef.current}]`);
     initializationRef.current = true;
     
-    // Save current render ID to variable for cleanup
     const currentRenderId = renderIdRef.current;
     
     initializeDesktop3D();
@@ -293,13 +339,41 @@ setStatus('error');
         </div>
       )}
       
-      {/* 로딩 */}
+      {/* 🔧 로딩 (547% 문제 해결된 진행률 표시) */}
       {status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/80 z-10">
-          <div className="text-center">
+          <div className="text-center max-w-sm px-6">
+            {/* 🔧 진행률 100% 제한 */}
+            <div className="mb-6">
+              <div className="w-full bg-gray-700 rounded-full h-3 mb-4">
+                <div 
+                  className="bg-blue-500 h-3 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(100, loadingProgress)}%` }}
+                ></div>
+              </div>
+              <p className="text-sm opacity-75">
+                {Math.min(100, Math.round(loadingProgress))}% 완료
+              </p>
+            </div>
+            
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p className="text-lg font-medium">3D 뷰어 로딩 중...</p>
             <p className="text-sm opacity-50 mt-2">{debugInfo}</p>
+            
+            {/* 🔧 로딩 단계 표시 (547% 방지) */}
+            <div className="mt-4 text-xs opacity-60">
+              {loadingProgress < 10 && "🔧 3D 엔진 초기화..."}
+              {loadingProgress >= 10 && loadingProgress < 90 && "📦 3D 모델 다운로드..."}
+              {loadingProgress >= 90 && loadingProgress < 100 && "🎨 브러시 정보 처리..."}
+              {loadingProgress >= 100 && "✅ 완료!"}
+            </div>
+            
+            {/* 🔧 브러시 에셋 로딩 상태 표시 (진행률과 별도) */}
+            {mainModelLoadedRef.current && totalProgressEventsRef.current > 0 && (
+              <div className="mt-2 text-xs opacity-40">
+                🎨 브러시 에셋: {completedProgressEventsRef.current}/{totalProgressEventsRef.current}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -321,9 +395,7 @@ setStatus('error');
         </div>
       )}
       
-
-
-{/* 🔧 작품 정보 (왼쪽 하단으로 변경) */}
+      {/* 🔧 작품 정보 (왼쪽 하단으로 변경) */}
       {status === 'active' && (
         <div className="absolute bottom-6 left-6 bg-black/70 backdrop-blur-md text-white p-4 rounded-xl z-10">
           <div className="text-left">
