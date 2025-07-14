@@ -24,10 +24,9 @@ export default function ARViewer({
   autoRotate = true,
   rotationSpeed = 0.002
 }: ARViewerProps) {
-  // 단순화된 상태 관리 (모바일 전용 상태 추가)
+  // 상태 관리
   const [status, setStatus] = useState<'loading' | 'mobile-waiting' | 'ar-active' | 'fallback' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  // 🔧 디바이스별 카메라 권한 초기값 설정
   const [cameraPermission, setCameraPermission] = useState<'requesting' | 'granted' | 'denied'>(
     deviceType === 'desktop' ? 'granted' : 'requesting'
   );
@@ -36,26 +35,31 @@ export default function ARViewer({
   const [threeIcosaStatus, setThreeIcosaStatus] = useState<'loading' | 'success' | 'fallback'>('loading');
   
   const containerRef = useRef<HTMLDivElement>(null);
-  // 🔧 중복 렌더링 방지를 위한 강화된 초기화 상태 관리
   const initializationRef = useRef(false);
   const componentMountedRef = useRef(false);
   const cleanupRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   
-  // 🔧 렌더링 추적을 위한 고유 ID 생성
+  // 🔧 MindAR 글로벌 상태 추적 (컴포넌트 독립적)
+  const mindARStateRef = useRef({
+    isLoading: false,
+    isLoaded: false,
+    hasError: false
+  });
+  
   const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
   
-  // 🔧 중복 렌더링 감지 및 로깅
+  // 🔧 재렌더링 감지 및 로깅 개선
   if (!componentMountedRef.current) {
-    console.log(`🎬 ARViewer 첫 렌더링 [${renderIdRef.current}] - 디바이스:`, deviceType);
+    console.log(`🎬 ARViewer 첫 렌더링 [${renderIdRef.current}] - 디바이스: ${deviceType}`);
     componentMountedRef.current = true;
   } else {
-    console.log(`🔄 ARViewer 재렌더링 감지 [${renderIdRef.current}] - 디바이스:`, deviceType, '(초기화 스킵)');
+    console.log(`🔄 ARViewer 재렌더링 감지 [${renderIdRef.current}] - 디바이스: ${deviceType} (초기화 스킵)`);
   }
 
   useEffect(() => {
-    // 🔧 강화된 중복 실행 방지 체크
+    // 🔧 강화된 중복 실행 방지
     if (!containerRef.current || initializationRef.current || cleanupRef.current) {
       console.log(`⏭️ 초기화 스킵 [${renderIdRef.current}] - Container: ${!!containerRef.current}, Init: ${initializationRef.current}, Cleanup: ${cleanupRef.current}`);
       return;
@@ -63,27 +67,22 @@ export default function ARViewer({
     
     console.log(`✅ Container DOM 준비 완료! [${renderIdRef.current}]`);
     initializationRef.current = true;
-    componentMountedRef.current = true;
     
-    // 🎯 디바이스별 초기화 로직 (완전히 분리된 경로)
+    // 디바이스별 초기화 로직
     if (deviceType === 'mobile') {
-      // 모바일: 순수하게 사용자 선택 UI만 표시 (아무것도 자동 실행 없음)
       console.log(`📱 모바일 모드: 사용자 선택 대기 상태로 전환 [${renderIdRef.current}]`);
-      setStatus('mobile-waiting'); // 모바일 전용 대기 상태
+      setStatus('mobile-waiting');
       setDebugInfo('모바일 모드 - 사용자 선택 대기 중');
-      console.log(`🚫 모바일: 자동 실행 없음, 순수 대기 상태 [${renderIdRef.current}]`);
-      // 모바일에서는 아무것도 실행하지 않음 - 사용자 선택만 대기
     } else {
-      // 데스크톱: 정상적으로 3D 뷰어 시작
       console.log(`🖥️ 데스크톱 모드: 바로 3D 뷰어 시작 [${renderIdRef.current}]`);
-      setStatus('loading'); // 데스크톱은 기존 로직 유지
+      setStatus('loading');
       setDebugInfo('데스크톱 3D 뷰어 초기화 중...');
       initializeDesktop3D(containerRef.current);
     }
 
-    // 🔧 강화된 정리 함수
+    // 정리 함수
     return () => {
-      const renderId = renderIdRef.current; // ref 값을 변수에 복사
+      const renderId = renderIdRef.current;
       console.log(`🧹 정리 함수 실행 [${renderId}]`);
       cleanupRef.current = true;
       componentMountedRef.current = false;
@@ -97,86 +96,195 @@ export default function ARViewer({
         rendererRef.current = null;
       }
       
-      // 초기화 상태 리셋
       initializationRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔧 권한 상태 직접 전달 방식의 MindAR 시작 (상태 동기화 문제 해결)
-  const startMindARWithPermission = async (hasPermission: boolean) => {
+  // 🔧 완전 개선된 MindAR 시작 함수 (상태 의존성 제거)
+  const startMindARDirectly = async () => {
     try {
-      console.log('📱 MindAR 시작 (권한 직접 전달) - 조건 체크 중...');
-      setDebugInfo('조건 체크 중: 모바일+AR선택+권한허용');
+      console.log('📱 MindAR 직접 시작 - 조건 체크 중...');
+      setDebugInfo('조건 체크: 모바일+카메라권한');
       
-      // 🔍 조건 1: 모바일 디바이스 체크
+      // 조건 체크
       if (deviceType !== 'mobile') {
-        console.log('❌ 조건 체크 실패: 모바일 디바이스가 아님');
-        setDebugInfo('모바일 디바이스가 아니어서 AR 사용 불가');
         throw new Error('모바일 디바이스가 아님');
       }
-      console.log('✅ 조건 1: 모바일 디바이스 확인');
       
-      // 🔍 조건 2: AR 선택 (사용자가 "카메라로 AR 보기" 버튼 클립)
-      console.log('✅ 조건 2: 사용자가 AR 모드 선택함');
-      setDebugInfo('조건 체크 중: 카메라 권한 확인...');
+      console.log('🎉 모든 조건 만족! MindAR 초기화 시작');
+      setDebugInfo('MindAR 스크립트 로딩 시작...');
       
-      // 🔍 조건 3: 카메라 권한 허용 체크 (매개변수로 직접 전달받음)
-      console.log('🔍 직접 전달된 권한 상태:', hasPermission);
-      console.log('🔍 React state 카메라 권한 상태:', cameraPermission);
+      // 🔧 글로벌 상태 기반 스크립트 로딩
+      await ensureMindARScriptsLoaded();
       
-      if (!hasPermission) {
-        console.log('❌ 조건 체크 실패: 카메라 권한이 허용되지 않음');
-        setDebugInfo('카메라 권한 실패 - AR 사용 불가');
-        throw new Error('카메라 권한이 허용되지 않음');
-      }
-      console.log('✅ 조건 3: 카메라 권한 허용됨 (직접 전달)');
-      
-      // 🎉 모든 조건 만족! MindAR 스크립트 로딩 시작
-      console.log('🎉 모든 조건 만족! 모바일+AR선택+권한허용 완료');
-      setDebugInfo('조건 체크 완료! MindAR 스크립트 로딩 시작...');
-      
-      // 1단계: 조건부 스크립트 삽입 실행
-      await loadMindARScripts();
-      
-      // 2단계: 실제 MindAR 초기화 및 AR 세션 시작
+      // 🔧 MindAR 세션 초기화
       await initializeMindARSession();
       
     } catch (error) {
-      console.error('❌ MindAR 초기화 실패 (권한 직접 전달):', error);
-      setDebugInfo(`실패: ${(error as Error).message}`);
+      console.error('❌ MindAR 초기화 실패:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setDebugInfo(`AR 실패: ${errorMsg}`);
       
-      // 🔧 모바일에서 AR 실패 시 3D 다로 자동 전환하지 않음
-      // 대신 사용자가 "AR 없이 감상하기" 버튼으로 선택하도록 유도
-      if (deviceType === 'mobile') {
-        // 모바일: 사용자 선택 UI로 되돌아가기
-        setStatus('mobile-waiting'); // 모바일 전용 대기 상태
-        setCameraPermission('requesting');
-        setDebugInfo('모바일 모드 - 사용자 선택 대기 중 (AR 실패)');
-        console.log('📱 모바일 AR 실패 - 사용자 선택 UI로 복귀');
-      } else {
-        // 데스크톱: 3D 뷰어로 폴백
-        setStatus('fallback');
-        if (containerRef.current) {
-          initializeDesktop3D(containerRef.current);
-        }
-      }
+      // 모바일에서 AR 실패 시 사용자 선택 UI로 되돌아가기
+      setStatus('mobile-waiting');
+      setCameraPermission('requesting');
+      setDebugInfo('사용자 선택 대기 중 (AR 실패)');
+      console.log('📱 모바일 AR 실패 - 사용자 선택 UI로 복귀');
     }
   };
 
-  // 🎯 2단계: 실제 MindAR 초기화 및 AR 세션 시작
+  // 🔧 글로벌 상태 기반 MindAR 스크립트 로딩 (중복 방지)
+  const ensureMindARScriptsLoaded = async (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      try {
+        // 🔧 이미 로드된 경우 즉시 반환
+        if (window.MindAR_THREE && window.MindAR_MindARThree) {
+          console.log('📦 MindAR 스크립트 이미 로드됨 - 즉시 반환');
+          setDebugInfo('MindAR 모듈 이미 준비됨!');
+          resolve();
+          return;
+        }
+        
+        // 🔧 현재 로딩 중인 경우 대기
+        if (mindARStateRef.current.isLoading) {
+          console.log('📦 MindAR 스크립트 로딩 중 - 완료 대기');
+          const checkLoaded = () => {
+            if (mindARStateRef.current.isLoaded) {
+              resolve();
+            } else if (mindARStateRef.current.hasError) {
+              reject(new Error('MindAR 스크립트 로딩 실패'));
+            } else {
+              setTimeout(checkLoaded, 100);
+            }
+          };
+          checkLoaded();
+          return;
+        }
+        
+        mindARStateRef.current.isLoading = true;
+        console.log('📦 MindAR 스크립트 로딩 시작 (글로벌 상태 기반)');
+        setDebugInfo('MindAR 스크립트 로딩 중...');
+        
+        // 🔧 기존 스크립트 확인 및 정리 (ID 기반)
+        const existingImportMap = document.getElementById('mindar-import-map');
+        const existingModuleScript = document.getElementById('mindar-module-script');
+        
+        if (existingImportMap) {
+          console.log('🗑️ 기존 Import Map 제거');
+          existingImportMap.remove();
+        }
+        if (existingModuleScript) {
+          console.log('🗑️ 기존 Module Script 제거');
+          existingModuleScript.remove();
+        }
+        
+        // 🔧 Import Map 생성
+        const importMap = document.createElement('script');
+        importMap.type = 'importmap';
+        importMap.id = 'mindar-import-map';
+        importMap.textContent = JSON.stringify({
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+          }
+        });
+        
+        document.head.appendChild(importMap);
+        console.log('✅ Import Map 삽입 완료');
+        setDebugInfo('Module Script 로딩 중...');
+        
+        // 🔧 Module Script 생성 (개선된 오류 처리)
+        const moduleScript = document.createElement('script');
+        moduleScript.type = 'module';
+        moduleScript.id = 'mindar-module-script';
+        moduleScript.textContent = `
+          try {
+            console.log('📦 MindAR 모듈 import 시작...');
+            
+            const THREE = await import('three');
+            const { MindARThree } = await import('mindar-image-three');
+            
+            window.MindAR_THREE = THREE;
+            window.MindAR_MindARThree = MindARThree;
+            
+            console.log('✅ MindAR 모듈 로드 완료');
+            
+            window.dispatchEvent(new CustomEvent('mindARReady', {
+              detail: { success: true }
+            }));
+            
+          } catch (error) {
+            console.error('❌ MindAR 모듈 로드 실패:', error);
+            window.dispatchEvent(new CustomEvent('mindARReady', {
+              detail: { success: false, error: error.message }
+            }));
+          }
+        `;
+        
+        // 🔧 로딩 완료 이벤트 리스너
+        const handleMindARReady = (event: any) => {
+          console.log('📦 MindAR 로딩 이벤트 수신:', event.detail);
+          window.removeEventListener('mindARReady', handleMindARReady);
+          
+          if (event.detail.success) {
+            console.log('✅ MindAR 스크립트 로딩 완료');
+            mindARStateRef.current.isLoaded = true;
+            mindARStateRef.current.isLoading = false;
+            setDebugInfo('MindAR 모듈 로드 성공!');
+            resolve();
+          } else {
+            console.error('❌ MindAR 스크립트 로딩 실패:', event.detail.error);
+            mindARStateRef.current.hasError = true;
+            mindARStateRef.current.isLoading = false;
+            reject(new Error(event.detail.error));
+          }
+        };
+        
+        window.addEventListener('mindARReady', handleMindARReady);
+        
+        // 🔧 타임아웃 (30초)
+        const timeout = setTimeout(() => {
+          console.error('❌ MindAR 스크립트 로딩 타임아웃');
+          window.removeEventListener('mindARReady', handleMindARReady);
+          mindARStateRef.current.hasError = true;
+          mindARStateRef.current.isLoading = false;
+          reject(new Error('MindAR 스크립트 로딩 타임아웃'));
+        }, 30000);
+        
+        // 성공 시 타임아웃 해제
+        const originalResolve = resolve;
+        resolve = () => {
+          clearTimeout(timeout);
+          originalResolve();
+        };
+        
+        // DOM에 추가
+        document.head.appendChild(moduleScript);
+        
+      } catch (error) {
+        console.error('❌ MindAR 스크립트 삽입 실패:', error);
+        mindARStateRef.current.hasError = true;
+        mindARStateRef.current.isLoading = false;
+        reject(error);
+      }
+    });
+  };
+
+  // 🔧 MindAR 세션 초기화 (타입 안전성 개선)
   const initializeMindARSession = async (): Promise<void> => {
     try {
       console.log('🚀 MindAR 세션 초기화 시작');
       setDebugInfo('MindAR 인스턴스 생성 중...');
       
-      // window 전역 객체에서 MindAR 모듈 가져오기 (타입 안전)
+      // 전역 객체 확인
+      if (!window.MindAR_THREE || !window.MindAR_MindARThree) {
+        throw new Error('MindAR 모듈이 전역 객체에 없음');
+      }
+      
       const THREE = window.MindAR_THREE;
       const MindARThree = window.MindAR_MindARThree;
-      
-      if (!THREE || !MindARThree) {
-        throw new Error('MindAR 모듈이 로드되지 않음');
-      }
       
       console.log('✅ MindAR 모듈 접근 성공');
       setDebugInfo('MindARThree 인스턴스 생성 중...');
@@ -184,28 +292,36 @@ export default function ARViewer({
       // MindARThree 인스턴스 생성
       const mindarThree = new MindARThree({
         container: containerRef.current!,
-        imageTargetSrc: '/markers/qr-marker.mind',
+        imageTargetSrc: 'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind',
       });
       
       const { renderer, scene, camera } = mindarThree;
       console.log('✅ MindARThree 인스턴스 생성 완료');
       
-      // 앵커 생성 (마커 0번)
+      // 앵커 생성
       const anchor = mindarThree.addAnchor(0);
       console.log('✅ AR 앵커 생성 완료');
       
-      setDebugInfo('3D 모델 로딩 중 (Three-Icosa 브러시 포함)...');
+      setDebugInfo('3D 모델 로딩 중...');
       
-      // GLTFLoader에 three-icosa 확장자 등록 및 모델 로딩
+      // 모델 로딩
       await loadModelForMindAR(anchor.group, THREE);
       
       console.log('🎯 MindAR 세션 시작 중...');
-      setDebugInfo('AR 세션 시작 중 (카메라 배경 활성화)...');
+      setDebugInfo('AR 세션 시작 중...');
       
-      // MindAR 세션 시작 (카메라 배경 자동 처리)
-      await mindarThree.start();
+      // 🔧 타입 안전성 개선된 세션 시작
+      try {
+        await mindarThree.start();
+        console.log('✅ MindAR 세션 시작 성공');
+      } catch (startError) {
+        console.error('❌ MindAR 세션 시작 실패:', startError);
+        // 🔧 타입 안전성 개선
+        const errorMessage = startError instanceof Error ? startError.message : String(startError);
+        throw new Error(`MindAR 세션 시작 실패: ${errorMessage}`);
+      }
       
-      // 렌더링 루프 시작 (마커 인식 시 3D 모델이 카메라 위에 오버레이)
+      // 렌더링 루프 시작
       renderer.setAnimationLoop(() => {
         renderer.render(scene, camera);
       });
@@ -216,7 +332,7 @@ export default function ARViewer({
       setDebugInfo('MindAR AR 모드 활성화 완료! 마커를 스캔하세요.');
       onLoadComplete?.();
       
-      console.log('🎉 MindAR 세션 초기화 완룼 - AR 모드 활성화!');
+      console.log('🎉 MindAR 세션 초기화 완료 - AR 모드 활성화!');
       
     } catch (error) {
       console.error('❌ MindAR 세션 초기화 실패:', error);
@@ -224,16 +340,16 @@ export default function ARViewer({
     }
   };
 
-  // 🎯 MindAR용 모델 로딩 (Three-Icosa 브러시 포함)
+  // 🔧 MindAR용 모델 로딩
   const loadModelForMindAR = async (anchorGroup: any, THREE: any): Promise<void> => {
     try {
-      console.log('🎨 MindAR 모델 로딩 시작 (Three-Icosa 브러시 포함)');
+      console.log('🎨 MindAR 모델 로딩 시작');
       setThreeIcosaStatus('loading');
       
       const loader = new THREE.GLTFLoader();
       let threeIcosaLoaded = false;
       
-      // Three-Icosa 확장자 등록 시도
+      // Three-Icosa 확장자 등록 시도 (재렌더링 방지)
       try {
         const threeIcosaModule = await import('three-icosa');
         const { GLTFGoogleTiltBrushMaterialExtension } = threeIcosaModule;
@@ -252,26 +368,24 @@ export default function ARViewer({
       }
       
       return new Promise((resolve, reject) => {
-        setDebugInfo(`sample.glb 로딩 중... ${threeIcosaLoaded ? '(Tilt Brush 브러시 포함)' : '(기본 모드)'}`);
+        setDebugInfo(`모델 로딩 중... ${threeIcosaLoaded ? '(Tilt Brush 브러시 포함)' : '(기본 모드)'}`);
         
         loader.load(
-          modelPath, // sample.glb
+          modelPath,
           (gltf: any) => {
             console.log('🎉 MindAR 모델 로딩 성공!');
             
-            // anchor.group에 모델 추가
             anchorGroup.add(gltf.scene);
             
-            // AR에서 적절한 모델 크기 조정
+            // AR 크기 조정
             const box = new THREE.Box3().setFromObject(gltf.scene);
             const size = box.getSize(new THREE.Vector3());
             const maxDimension = Math.max(size.x, size.y, size.z);
             
-            // AR에서는 실제 크기의 10% 정도로 축소
             const scale = 0.1 / maxDimension;
             gltf.scene.scale.setScalar(scale);
             
-            console.log('✅ 모델이 anchor.group에 추가됨 (크기 조정 완료)');
+            console.log('✅ 모델이 anchor.group에 추가됨');
             setDebugInfo(`AR 모델 준비 완료! ${threeIcosaLoaded ? '(Tilt Brush 브러시 포함)' : '(기본 모드)'}`);
             
             resolve();
@@ -279,7 +393,7 @@ export default function ARViewer({
           (progress: any) => {
             if (progress.total > 0) {
               const percent = Math.round((progress.loaded / progress.total) * 100);
-              setDebugInfo(`sample.glb 로딩... ${percent}%`);
+              setDebugInfo(`모델 로딩... ${percent}%`);
             }
           },
           (loadError: any) => {
@@ -296,125 +410,111 @@ export default function ARViewer({
     }
   };
 
-  // 🎯 MindAR 공식 문서 방식: Import Map + Module Script 동적 삽입
-  const loadMindARScripts = async (): Promise<void> => {    
-    // 🔍 window 객체에 모듈이 이미 로드되었는지 먼저 확인
-    if (window.MindAR_THREE && window.MindAR_MindARThree) {
-      console.log('✅ MindAR 모듈이 이미 로드되어 있습니다. (캐시됨)');
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve, reject) => {
-      try {
-        console.log('📦 MindAR 공식 방식: Import Map + Module Script 삽입 시작');
-        setDebugInfo('Import Map 설정 중...');
-        
-        // 1. Import Map 중복 삽입 방지
-        if (!document.querySelector('script[type="importmap"]')) {
-          const importMap = document.createElement('script');
-          importMap.type = 'importmap';
-          importMap.textContent = JSON.stringify({
-            "imports": {
-              "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-              "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-              "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
-            }
-          });
-          document.head.appendChild(importMap);
-          console.log('✅ Import Map 삽입 완료');
-        } else {
-          console.log('ℹ️ Import Map이 이미 존재합니다. (스킵)');
-        }
-        
-        setDebugInfo('Module Script 로딩 중...');
-        
-        // 3. 로딩 완료 이벤트 리스너 등록
-        const handleModulesLoaded = () => {
-          console.log('✅ 모든 MindAR 모듈 로딩 완료 (공식 방식)');
-          setDebugInfo('MindAR 모듈 로드 성공!');
-          window.removeEventListener('mindARModulesLoaded', handleModulesLoaded);
-          resolve();
-        };
-        window.addEventListener('mindARModulesLoaded', handleModulesLoaded, { once: true });
-        
-        // 2. Module Script 중복 삽입 방지
-        if (!document.getElementById('mindar-module-script')) {
-          const moduleScript = document.createElement('script');
-          moduleScript.id = 'mindar-module-script';
-          moduleScript.type = 'module';
-          moduleScript.textContent = `import * as THREE from 'three'; import { MindARThree } from 'mindar-image-three'; window.MindAR_THREE = THREE; window.MindAR_MindARThree = MindARThree; window.dispatchEvent(new CustomEvent('mindARModulesLoaded')); console.log('✅ MindAR 모듈 로드 완료 (공식 Import Map 방식)');`;
-          moduleScript.onerror = () => reject(new Error('Module Script 로드 실패'));
-          document.head.appendChild(moduleScript);
-          console.log('📦 Module Script 삽입 완료 - 로딩 대기 중...');
-        } else {
-          console.log('ℹ️ Module Script가 이미 존재합니다. 로딩 완료 이벤트를 기다립니다.');
-        }
-        
-      } catch (error) {
-        console.error('❌ Import Map 방식 스크립트 삽입 실패:', error);
-        reject(error);
+  // 🔧 개선된 카메라 권한 요청 (상태 반환)
+  const requestCameraPermissionAndStartAR = async (): Promise<void> => {
+    try {
+      console.log('📸 카메라 권한 요청 및 AR 시작');
+      setDebugInfo('카메라 권한 요청 중...');
+      
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        throw new Error('이 브라우저는 카메라를 지원하지 않습니다');
       }
-    });
+      
+      const constraints = {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        },
+        audio: false
+      };
+      
+      console.log('📸 getUserMedia 호출 중...');
+      setDebugInfo('브라우저에 카메라 권한 요청 중...');
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      console.log('✅ 카메라 권한 허용됨!', stream);
+      
+      // 스트림 정리
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
+      
+      console.log('✅ 카메라 권한 확인 완료 - AR 시작');
+      setDebugInfo('카메라 권한 허용됨! AR 초기화 중...');
+      
+      // 🔧 상태 업데이트 없이 직접 AR 시작
+      await startMindARDirectly();
+      
+    } catch (error) {
+      console.error('❌ 카메라 권한 또는 AR 시작 실패:', error);
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+      
+      setDebugInfo(`실패: ${errorMessage}`);
+      
+      // 3D 모드로 폴백
+      setStatus('fallback');
+      if (containerRef.current) {
+        initializeDesktop3D(containerRef.current);
+      }
+    }
   };
 
-  // 🎯 데스크톱: 기본 3D 뷰어 (예전 PC버전 렌더링 방식 적용)
+  // 🎯 데스크톱 3D 뷰어 (재렌더링 방지 개선)
   const initializeDesktop3D = async (container: HTMLDivElement) => {
     try {
-      console.log('🖥️ 3D 뷰어 모드 초기화 시작 (개선된 렌더링)');
-      setDebugInfo('3D 뷰어 라이브러리 로딩 중...');
+      console.log('🖥️ 3D 뷰어 모드 초기화 시작');
+      setDebugInfo('3D 뷰어 초기화 중...');
       
       // 컨테이너 정리
       container.innerHTML = '';
       
-      // 🎯 예전 방식: Scene 생성 (조명 최소화)
+      // Scene 생성
       const scene = new THREE.Scene();
-      // 배경색을 검은색으로 (예전 방식)
       scene.background = new THREE.Color(0x000000);
       
-      // 🎯 예전 방식: Camera 설정
+      // Camera 설정
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      scene.add(camera); // 예전 방식: 카메라를 씬에 추가
+      scene.add(camera);
       
-      // 🎯 예전 방식: 카메라 위치 및 회전 설정
       camera.position.set(1, 1, 1);
       camera.setRotationFromEuler(new THREE.Euler(0.2, 1, -0.25));
       
-      // 🎯 예전 방식: 최소한의 렌더러 설정
+      // 렌더러 설정
       const renderer = new THREE.WebGLRenderer();
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
-      // 🎯 OrbitControls 추가 (사용성 향상, 예전 설정 적용)
+      // OrbitControls 추가
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
       controls.screenSpacePanning = false;
       
-      // 🎯 예전 방식: 확대/축소 제한 완화
-      controls.minDistance = 0.1;  // 매우 가까이
-      controls.maxDistance = 100;  // 매우 멀리
-      controls.maxPolarAngle = Math.PI; // 완전한 회전 허용
+      controls.minDistance = 0.1;
+      controls.maxDistance = 100;
+      controls.maxPolarAngle = Math.PI;
       
-      // 🎯 예전 방식: 자동 회전 설정 (천천히)
       controls.autoRotate = autoRotate;
-      controls.autoRotateSpeed = rotationSpeed * 5; // 0.002 * 5 = 0.01
+      controls.autoRotateSpeed = rotationSpeed * 5;
 
-      console.log('✅ 3D 씬 초기화 완료 (개선된 방식)');
+      console.log('✅ 3D 씬 초기화 완료');
       setDebugInfo('3D 모델 로딩 중...');
 
-      // 🎯 예전 방식으로 GLB 모델 로딩
-      await loadModelOriginalStyle(scene, camera, controls);
+      // 🔧 재렌더링 방지를 위한 개선된 모델 로딩
+      await loadModelForDesktop(scene, camera, controls);
 
       // 성공 상태 설정
       if (status === 'loading') {
-        setStatus('fallback'); // 3D 뷰어 모드
+        setStatus('fallback');
       }
       onLoadComplete?.();
-      setDebugInfo('3D 뷰어 완료! (개선된 렌더링)');
+      setDebugInfo('3D 뷰어 완료!');
 
-      // 🎯 예전 방식: 단순한 렌더링 루프
+      // 렌더링 루프
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
         controls.update();
@@ -440,87 +540,35 @@ export default function ARViewer({
     }
   };
 
-  // 🔧 강화된 카메라 권한 요청 및 상태 업데이트
-  const requestCameraPermission = async (): Promise<boolean> => {
+  // 🔧 데스크톱용 모델 로딩 (재렌더링 방지)
+  const loadModelForDesktop = async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
-      console.log('📸 카메라 권한 요청 시작...');
-      setDebugInfo('브라우저 카메라 권한 확인 중...');
-      
-      if (!navigator?.mediaDevices?.getUserMedia) {
-        console.error('❌ 브라우저가 카메라를 지원하지 않음');
-        throw new Error('이 브라우저는 카메라를 지원하지 않습니다');
-      }
-      
-      const constraints = {
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 }
-        },
-        audio: false
-      };
-      
-      console.log('📸 getUserMedia 호출 중...', constraints);
-      setDebugInfo('사용자에게 카메라 권한 요청 중...');
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      console.log('✅ 카메라 스트림 획득 성공!', stream);
-      console.log('📹 비디오 트랙:', stream.getVideoTracks());
-      
-      // 권한 확인 후 스트림 정리
-      stream.getTracks().forEach(track => {
-        console.log('🚫 트랙 정리:', track.kind, track.label);
-        track.stop();
-      });
-      
-      console.log('✅ 카메라 권한 허용됨 - 상태 업데이트');
-      setCameraPermission('granted');
-      setDebugInfo('카메라 권한 허용 완료!');
-      return true;
-      
-    } catch (error) {
-      console.error('❌ 카메라 권한 요청 실패:', error);
-      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
-      
-      setCameraPermission('denied');
-      setDebugInfo(`카메라 권한 실패: ${errorMessage}`);
-      
-      return false;
-    }
-  };
-
-  // 🎯 예전 PC버전 방식: 모델 로딩 (개선된 렌더링)
-  const loadModelOriginalStyle = async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
-    try {
-      console.log(`🔄 모델 로딩 시작 (개선된 방식):`, modelPath);
+      console.log('🔄 데스크톱 모델 로딩 시작:', modelPath);
       setThreeIcosaStatus('loading');
       
       const loader = new GLTFLoader();
       let threeIcosaLoaded = false;
       
-      // 🎯 예전 방식: Three-Icosa 확장자 등록
+      // Three-Icosa 확장자 등록 (재렌더링 최소화)
       try {
         setDebugInfo('Three-Icosa 브러시 확장 로딩 중...');
         
-        // @ts-ignore - three-icosa 모듈 로딩
         const threeIcosaModule = await import('three-icosa');
         const { GLTFGoogleTiltBrushMaterialExtension } = threeIcosaModule;
         
         if (GLTFGoogleTiltBrushMaterialExtension) {
-          // 🎯 예전 방식: 원본 브러시 경로 사용
           const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
           loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
           
-          console.log(`✅ Three-Icosa 확장자 등록 완료 (원본 경로)`);
+          console.log('✅ 데스크톱용 Three-Icosa 확장자 등록 완료');
           setThreeIcosaStatus('success');
           threeIcosaLoaded = true;
           setDebugInfo('Three-Icosa 브러시 로드 완료!');
         }
       } catch (icosaError) {
-        console.warn('⚠️ Three-Icosa 로드 실패 (기본 GLTFLoader로 진행):', icosaError);
+        console.warn('⚠️ Three-Icosa 로드 실패 (기본 모드):', icosaError);
         setThreeIcosaStatus('fallback');
-        setDebugInfo('브러시 정보 없이 기본 모드로 로딩...');
+        setDebugInfo('기본 모드로 로딩...');
       }
 
       return new Promise((resolve, reject) => {
@@ -529,25 +577,21 @@ export default function ARViewer({
         loader.load(
           modelPath,
           (gltf) => {
-            console.log(`🎉 모델 로딩 성공! (개선된 방식)`);
+            console.log('🎉 데스크톱 모델 로딩 성공!');
             
-            // 🎯 예전 방식: model.scene을 직접 추가
             scene.add(gltf.scene);
             
-            // 🎯 예전 방식: 모델 크기에 따라 카메라 타겟 조정
+            // 모델 크기에 따라 카메라 조정
             const box = new THREE.Box3().setFromObject(gltf.scene);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             
-            // 모델 중심점으로 OrbitControls 타겟 설정
             controls.target.copy(center);
             
-            // 🎯 예전 방식: 모델이 더 크게 보이도록 카메라 거리 조정
             const maxDimension = Math.max(size.x, size.y, size.z);
-            const distance = maxDimension * 0.5; // 예전 코드와 동일한 비율
+            const distance = maxDimension * 0.5;
             
-            // 🎯 예전 방식: 카메라 위치를 모델 크기에 맞게 조정 (원본 비율 유지)
-            const originalDistance = Math.sqrt(1*1 + 1*1 + 1*1); // 원본 (1,1,1)의 거리
+            const originalDistance = Math.sqrt(3); // sqrt(1²+1²+1²)
             const scale = distance / originalDistance;
             
             camera.position.set(
@@ -558,21 +602,18 @@ export default function ARViewer({
             
             controls.update();
             
-            console.log('✅ 모델이 씬에 추가됨 (개선된 방식)');
-            console.log('📊 모델 중심:', center);
-            console.log('📊 모델 크기:', size);
-            console.log('📊 카메라 위치:', camera.position);
+            console.log('✅ 데스크톱 모델이 씬에 추가됨');
             setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(Tilt Brush 브러시 포함)' : '(기본 모드)'}`);
             resolve(gltf);
           },
           (progress) => {
             if (progress.total > 0) {
               const percent = Math.round((progress.loaded / progress.total) * 100);
-              setDebugInfo(`모델 로딩 중... ${percent}%`);
+              setDebugInfo(`모델 로딩... ${percent}%`);
             }
           },
           (loadError) => {
-            console.error(`❌ 모델 로딩 실패:`, loadError);
+            console.error('❌ 데스크톱 모델 로딩 실패:', loadError);
             const errorMessage = loadError instanceof Error ? loadError.message : 'Unknown error';
             setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
             reject(loadError);
@@ -581,7 +622,7 @@ export default function ARViewer({
       });
       
     } catch (error) {
-      console.error(`❌ 모델 로더 초기화 실패:`, error);
+      console.error('❌ 데스크톱 모델 로더 초기화 실패:', error);
       setThreeIcosaStatus('fallback');
       throw error;
     }
@@ -595,7 +636,7 @@ export default function ARViewer({
         style={{ backgroundColor: status === 'ar-active' ? 'transparent' : '#000000' }}
       />
       
-      {/* 🎯 모바일 → 사용자 선택 UI (완전히 분리된 상태) */}
+      {/* 🎯 모바일 사용자 선택 UI */}
       {deviceType === 'mobile' && 
        cameraPermission === 'requesting' && 
        status === 'mobile-waiting' && (
@@ -609,27 +650,16 @@ export default function ARViewer({
               <button
                 onClick={async () => {
                   try {
-                    console.log('📸 사용자가 "AR 보기" 버튼 클릭');
-                    setDebugInfo('카메라 권한 요청 중...');
+                    console.log('📸 사용자가 "AR 보기" 버튼 클릭 (완전 개선된 방식)');
+                    setDebugInfo('카메라 권한 요청 및 AR 시작 중...');
                     
-                    const granted = await requestCameraPermission();
-                    console.log('📸 카메라 권한 요청 결과:', granted);
+                    // 🔧 상태 의존성 완전 제거 - 한 번에 처리
+                    await requestCameraPermissionAndStartAR();
                     
-                    if (granted) {
-                      console.log('✅ 카메라 권한 허용됨 - AR 초기화 시작');
-                      setDebugInfo('카메라 권한 허용됨! AR 초기화 중...');
-                      await startMindARWithPermission(true);
-                    } else {
-                      console.log('❌ 카메라 권한 거부됨 - 3D 모드로 대체');
-                      setDebugInfo('카메라 권한 거부됨 - 3D 모드로 전환');
-                      setStatus('fallback');
-                      if (containerRef.current) {
-                        initializeDesktop3D(containerRef.current);
-                      }
-                    }
                   } catch (error) {
-                    console.error('❌ AR 초기화 전체 실패:', error);
-                    setDebugInfo(`AR 실패: ${(error as Error).message}`);
+                    console.error('❌ AR 시작 전체 실패:', error);
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    setDebugInfo(`AR 실패: ${errorMsg}`);
                     setStatus('fallback');
                     if (containerRef.current) {
                       initializeDesktop3D(containerRef.current);
@@ -643,6 +673,7 @@ export default function ARViewer({
               
               <button
                 onClick={() => {
+                  console.log('🎨 사용자가 "AR 없이 감상하기" 선택');
                   setStatus('fallback');
                   if (containerRef.current) {
                     initializeDesktop3D(containerRef.current);
@@ -694,8 +725,8 @@ export default function ARViewer({
       {(status === 'ar-active' || status === 'fallback') && (
         <div className="absolute top-4 left-4 bg-black/70 text-white p-2 rounded text-sm z-10">
           <div>✅ {
-            status === 'ar-active' ? 'MindAR 모드' : 
-            deviceType === 'mobile' ? '모바일 3D 모드' : '데스크톱 3D 모드'
+            status === 'ar-active' ? 'MindAR 모드 (최종 개선)' : 
+            deviceType === 'mobile' ? '모바일 3D 모드 (최종 개선)' : '데스크톱 3D 모드 (최종 개선)'
           } 활성화</div>
           <div className="text-xs">
             🎨 Three-Icosa: {
@@ -709,20 +740,21 @@ export default function ARViewer({
               <div className="text-xs opacity-75 mt-1">
                 {deviceType === 'mobile' ? '터치: 회전 | 핀치: 확대/축소' : '마우스: 회전 | 휠: 확대/축소'}
               </div>
-              <div className="text-xs text-green-400">🎯 개선된 렌더링 적용</div>
+              <div className="text-xs text-green-400">🎯 재렌더링 방지 적용</div>
             </>
           )}
         </div>
       )}
       
-      {/* 디버그 패널 */}
+      {/* 최종 개선된 디버그 패널 */}
       {showDebugPanel && (
         <div className="fixed top-0 left-0 right-0 bg-purple-600/90 text-white p-2 text-xs z-50">
           <div className="flex justify-between items-center">
             <div>
-              <div>디버그: {debugInfo}</div>
+              <div>🔧 최종 디버그: {debugInfo}</div>
               <div>상태: {status} | 카메라: {cameraPermission} | 디바이스: {deviceType}</div>
-              <div>🗑️ WebXR 제거 완료 | 🎯 MindAR 준비 중 | 브러시: {threeIcosaStatus}</div>
+              <div>📦 MindAR 글로벌: 로딩={mindARStateRef.current.isLoading ? 'Y' : 'N'} | 완료={mindARStateRef.current.isLoaded ? 'Y' : 'N'} | 오류={mindARStateRef.current.hasError ? 'Y' : 'N'}</div>
+              <div>🎨 브러시: {threeIcosaStatus} | 🔧 상태 의존성 제거 + 재렌더링 방지</div>
               {errorMessage && <div className="text-yellow-300">오류: {errorMessage}</div>}
             </div>
             <button 
@@ -735,14 +767,25 @@ export default function ARViewer({
         </div>
       )}
       
-      {/* 공식 Import Map 방식 로딩 완료 안내 */}
+      {/* AR 활성화 완료 안내 */}
       {status === 'ar-active' && (
         <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-3 rounded text-sm z-10">
           <div className="text-center">
-            <div className="text-2xl mb-2">📦</div>
-            <p className="font-medium">MindAR 공식 Import Map 로딩 완료</p>
-            <p className="text-xs opacity-75 mt-1">window.MindAR_THREE, window.MindAR_MindARThree 사용 준비됨</p>
-            <p className="text-xs text-green-400 mt-1">✅ 공식 방식 완료 - 다음: AR 초기화</p>
+            <div className="text-2xl mb-2">🎯</div>
+            <p className="font-medium">MindAR 최종 개선 완료</p>
+            <p className="text-xs opacity-75 mt-1">상태 의존성 제거 + 글로벌 중복 방지 + 타입 안전성</p>
+            <p className="text-xs text-green-400 mt-1">✅ 완전 개선된 AR - 카메라로 마커를 스캔하세요</p>
+            <p className="text-xs opacity-50 mt-2">
+              마커: 
+              <a 
+                href="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline text-blue-300 ml-1"
+              >
+                여기서 다운로드
+              </a>
+            </p>
           </div>
         </div>
       )}
