@@ -93,6 +93,7 @@ export default function ARViewer({
           "imports": {
             "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
             "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "three/examples/jsm/loaders/GLTFLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js",
             "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
           }
         });
@@ -109,7 +110,11 @@ export default function ARViewer({
             console.log('📦 MindAR 모듈 import 시작...');
             
             const THREE = await import('three');
+            const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
             const { MindARThree } = await import('mindar-image-three');
+            
+            // GLTFLoader를 THREE 객체에 추가
+            THREE.GLTFLoader = GLTFLoader;
             
             window.MindAR_THREE = THREE;
             window.MindAR_MindARThree = MindARThree;
@@ -179,7 +184,15 @@ export default function ARViewer({
     try {
       console.log('🎨 MindAR 모델 로딩 시작');
       
-      const loader = new THREE.GLTFLoader();
+      // GLTFLoader 생성 - 안전한 방식으로 접근
+      let loader;
+      if (THREE.GLTFLoader) {
+        loader = new THREE.GLTFLoader();
+      } else {
+        console.error('❌ GLTFLoader를 찾을 수 없음');
+        throw new Error('GLTFLoader를 사용할 수 없습니다');
+      }
+      
       let threeIcosaLoaded = false;
       
       // Three-Icosa 재렌더링 방지
