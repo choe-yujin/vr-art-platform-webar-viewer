@@ -1,22 +1,32 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import ARViewer from '@/components/ARViewer';
 
 export default function ARViewerPage() {
   const params = useParams();
   const artworkId = params.id;
   // 🔧 초기값을 null로 설정하여 디바이스 감지 완료까지 대기
+  // 🔧 디바이스 타입 감지 및 중복 방지
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
+  const deviceDetectedRef = useRef(false);
   const [isViewerReady, setIsViewerReady] = useState(false);
 
   useEffect(() => {
+    // 🔧 중복 감지 방지
+    if (deviceDetectedRef.current) {
+      console.log('🔄 디바이스 감지 중복 실행 방지');
+      return;
+    }
+    
     // 디바이스 타입 감지
     const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
       navigator.userAgent
     );
     const detectedType = isMobile ? 'mobile' : 'desktop';
+    
+    deviceDetectedRef.current = true;
     setDeviceType(detectedType);
     
     console.log('📱 디바이스 타입 감지 완료:', detectedType);
@@ -36,14 +46,28 @@ export default function ARViewerPage() {
     <div className="fixed inset-0 bg-black">
       {/* AR 뷰어 컨테이너 */}
       <div id="ar-container" className="w-full h-full relative">
-        <ARViewer
-          modelPath="/sample.glb"
-          deviceType={deviceType || 'desktop'} // null 방지
-          onLoadComplete={handleLoadComplete}
-          onLoadError={handleLoadError}
-          autoRotate={true}          // 자동 회전 활성화
-          rotationSpeed={0.05}        // 천천히 회전 (0.05 = 매우 천천히, 0.1 = 천천히, 0.5 = 보통)
-        />
+        {/* 🔧 디바이스 감지 완료 후에만 ARViewer 렌더링 */}
+        {deviceType && (
+          <ARViewer
+            modelPath="/sample.glb"
+            deviceType={deviceType}
+            onLoadComplete={handleLoadComplete}
+            onLoadError={handleLoadError}
+            autoRotate={true}          // 자동 회전 활성화
+            rotationSpeed={0.05}        // 천천히 회전 (0.05 = 매우 천천히, 0.1 = 천천히, 0.5 = 보통)
+          />
+        )}
+        
+        {/* 🔧 디바이스 감지 중 로딩 화면 */}
+        {!deviceType && (
+          <div className="flex items-center justify-center h-full text-white">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+              <p className="text-lg font-medium">디바이스 감지 중...</p>
+              <p className="text-sm opacity-50 mt-2">잠시만 기다려주세요</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 플로팅 버튼들 - 뷰어 준비 완료 후 표시 */}
