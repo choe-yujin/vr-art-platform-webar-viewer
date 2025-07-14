@@ -52,6 +52,7 @@ export default function DesktopViewer({
         try {
           const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
           const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+          // 기존 ARViewer와 동일한 간단한 방식
           loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
           threeIcosaStateRef.current.isLoaded = true;
           threeIcosaLoaded = true;
@@ -181,7 +182,11 @@ export default function DesktopViewer({
     if (initializationRef.current) return;
     initializationRef.current = true;
     
+    // 🔧 ESLint 경고 해결: ref 값을 변수로 복사
+    const currentContainer = containerRef.current;
+    const currentThreeIcosaState = threeIcosaStateRef.current;
     const currentRenderId = renderIdRef.current;
+    
     console.log(`✅ DesktopViewer 초기화 시작 [${currentRenderId}]`);
     const cleanupResize = initializeDesktop3D();
 
@@ -211,12 +216,14 @@ export default function DesktopViewer({
         rendererRef.current.forceContextLoss();
         rendererRef.current = null;
       }
-      if(containerRef.current) {
-        containerRef.current.innerHTML = '';
+      
+      // 🔧 ESLint 경고 해결: 복사된 변수 사용
+      if (currentContainer) {
+        currentContainer.innerHTML = '';
       }
       
       initializationRef.current = false;
-      threeIcosaStateRef.current.isLoaded = false;
+      currentThreeIcosaState.isLoaded = false;
     };
   }, [initializeDesktop3D]);
 
