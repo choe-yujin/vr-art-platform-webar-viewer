@@ -171,6 +171,7 @@ export default function DesktopViewer({
     initializationRef.current = true;
     
     const currentRenderId = renderIdRef.current;
+    const currentContainer = containerRef.current; // ESLint 경고 해결: ref 값 복사
     console.log(`✅ DesktopViewer 초기화 시작 [${currentRenderId}]`);
     const cleanupResize = initializeDesktop3D();
 
@@ -200,8 +201,8 @@ export default function DesktopViewer({
         rendererRef.current.forceContextLoss();
         rendererRef.current = null;
       }
-      if(containerRef.current) {
-        containerRef.current.innerHTML = '';
+      if (currentContainer) { // 복사된 값 사용
+        currentContainer.innerHTML = '';
       }
       
       initializationRef.current = false;
