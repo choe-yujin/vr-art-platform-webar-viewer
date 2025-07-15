@@ -458,35 +458,36 @@ export default function ARViewer({
   }, [deviceType, initializeMobileAR, performCompleteCleanup]);
 
   return (
-    <div className="absolute inset-0 w-full h-full">
-      {/* ✨ 개선된 뒤로가기 버튼 (z-index 최상위) */}
+    <div className="fixed inset-0 w-full h-full overflow-hidden">
+      {/* ✨ 이슈 4 해결: 뒤로가기 버튼 항상 보이게 (z-index 최상위) */}
       <button
         onClick={handleBackClick}
-        className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-[9999] transition-colors"
+        className="fixed top-6 left-6 bg-black/80 hover:bg-black/90 text-white p-4 rounded-full z-[99999] transition-colors shadow-lg"
         aria-label="뒤로가기"
       >
         <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
 
-      {/* ✨ 이슈 4 해결: 카메라 컨테이너 좌우 꽉 차게 */}
+      {/* ✨ 이슈 1 해결: 카메라 컨테이너 전체 화면에 꽉 차게 + 오버플로우 방지 */}
       <div
         ref={containerRef}
-        className="absolute inset-0 w-full h-full"
+        className="fixed inset-0 w-full h-full"
         style={{ 
           backgroundColor: status === 'ar-active' ? 'transparent' : '#000000',
           width: '100vw',
           height: '100vh',
           left: 0,
-          right: 0
+          top: 0,
+          zIndex: 1
         }}
       />
       
       {/* 로딩 상태 */}
       {status === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center text-white bg-black/80 z-10">
-          <div className="text-center">
+        <div className="fixed inset-0 flex items-center justify-center text-white bg-black/80 z-[50]">
+          <div className="text-center px-6">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p className="text-lg font-medium">AR 뷰어 로딩 중...</p>
             <p className="text-sm opacity-50 mt-2">{debugInfo}</p>
@@ -496,8 +497,8 @@ export default function ARViewer({
       
       {/* 에러 상태 */}
       {status === 'error' && (
-        <div className="absolute inset-0 flex items-center justify-center text-white bg-red-900/80 z-10">
-          <div className="text-center p-6">
+        <div className="fixed inset-0 flex items-center justify-center text-white bg-red-900/80 z-[50]">
+          <div className="text-center p-6 max-w-sm mx-4">
             <p className="text-lg font-bold mb-2">⚠️ AR 오류 발생</p>
             <p className="text-sm opacity-75 mb-4">{errorMessage}</p>
             <button
@@ -510,10 +511,10 @@ export default function ARViewer({
         </div>
       )}
 
-      {/* ✨ 이슈 2 해결: 스캔 팝업 z-index 최상위 (9999) */}
+      {/* ✨ 이슈 2&3 해결: 스캔 팝업 z-index 최상위 + 오른쪽 잘림 방지 */}
       {showTimeoutPopup && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl text-center">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[99999] p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center mx-4">
             <div className="text-4xl mb-4">
               {markerFoundRef.current ? '🔍' : '⏱️'}
             </div>
@@ -541,7 +542,7 @@ export default function ARViewer({
       
       {/* AR 활성화 상태 정보 */}
       {status === 'ar-active' && !showTimeoutPopup && (
-        <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-3 rounded text-sm z-10 pointer-events-none">
+        <div className="fixed bottom-6 left-4 right-4 bg-black/70 text-white p-3 rounded text-sm z-[40] pointer-events-none">
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
               {isScanning && (
