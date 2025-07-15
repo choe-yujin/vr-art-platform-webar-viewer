@@ -31,13 +31,15 @@ export default function ARViewer({
   onBackPressed,
   onSwitchTo3D,
 }: ARViewerProps) {
+  // ✨ DesktopViewer 수준 상태 관리
   const [status, setStatus] = useState<'loading' | 'ar-active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [debugInfo, setDebugInfo] = useState<string>('AR 초기화 중...');
+  const [debugInfo, setDebugInfo] = useState<string>('AR 뷰어 초기화 중...');
   const [threeIcosaStatus, setThreeIcosaStatus] = useState<'loading' | 'success' | 'fallback'>('loading');
   const [showTimeoutPopup, setShowTimeoutPopup] = useState(false);
   const [isScanning, setIsScanning] = useState<boolean>(true);
 
+  // ✨ DesktopViewer 수준 ref 관리 
   const containerRef = useRef<HTMLDivElement>(null);
   const mindarInstanceRef = useRef<MindARThreeInstance | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -47,9 +49,33 @@ export default function ARViewer({
   const initializationRef = useRef(false);
   const cleanupRef = useRef(false);
   const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
+  const animationFrameRef = useRef<number | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
 
   const SCRIPT_ID_IMPORT_MAP = 'mindar-import-map';
   const SCRIPT_ID_MODULE = 'mindar-module-script';
+
+  // ✨ 완전한 상태 초기화 함수 (DesktopViewer 방식)
+  const resetAllStates = useCallback(() => {
+    console.log('🔄 ARViewer 상태 완전 초기화');
+    
+    // 상태 초기화
+    setStatus('loading');
+    setErrorMessage('');
+    setDebugInfo('AR 뷰어 초기화 중...');
+    setThreeIcosaStatus('loading');
+    setShowTimeoutPopup(false);
+    setIsScanning(true);
+    
+    // ref 초기화
+    markerFoundRef.current = false;
+    markerLostTimeRef.current = null;
+    initializationRef.current = false;
+    cleanupRef.current = false;
+    
+    // 새로운 render ID 생성
+    renderIdRef.current = Math.random().toString(36).substr(2, 9);
+  }, []);
 
   const ensureMindARScriptsLoaded = useCallback(async (): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -98,6 +124,7 @@ export default function ARViewer({
     });
   }, [SCRIPT_ID_IMPORT_MAP, SCRIPT_ID_MODULE]);
 
+  // ✨ 이슈 3 해결: 모델 크기 개선 (더 크게)
   const loadModelForMindAR = useCallback(async (anchorGroup: THREE.Group): Promise<void> => {
     const GLTFLoader = window.MindAR_GLTFLoader;
     if (!GLTFLoader) {
@@ -107,11 +134,10 @@ export default function ARViewer({
     const loader = new GLTFLoader();
     let threeIcosaLoaded = false;
 
-    // 별도의 상태 처리 없이 매번 새로 등록
+    // Three-Icosa 로드 시도
     try {
       const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
       const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
-      // 매번 새로운 로더에 확장자 등록
       loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
       threeIcosaLoaded = true;
       setThreeIcosaStatus('success');
@@ -122,7 +148,6 @@ export default function ARViewer({
       threeIcosaLoaded = false;
     }
 
-    // 🎯 모델 로딩 (Tilt Brush 지원 여부와 관계없이 동작)
     return new Promise<void>((resolve, reject) => {
       setDebugInfo(`모델 로딩 중... ${threeIcosaLoaded ? '(Tilt Brush 지원)' : '(기본 모드)'}`);
       
@@ -141,20 +166,20 @@ export default function ARViewer({
           // 모델을 중심으로 이동
           model.position.sub(center);
           
-          // 적절한 크기로 스케일링
+          // ✨ 이슈 3 해결: 모델 크기를 더 크게 (0.3 → 0.8)
           const maxDimension = Math.max(size.x, size.y, size.z);
-          const targetSize = 0.3; // AR 공간에서 적절한 크기
+          const targetSize = 0.8; // AR 공간에서 더 큰 크기
           const scale = targetSize / maxDimension;
           model.scale.setScalar(scale);
           
-          // 마커 위에 배치
+          // 마커 위에 적절히 배치
           model.position.set(0, 0, 0);
           const scaledHeight = size.y * scale;
-          model.position.y = scaledHeight * 0.1; // 모델 높이의 10%만큼 위로
+          model.position.y = scaledHeight * 0.05; // 모델을 바닥에 더 가깝게
           
           anchorGroup.add(model);
           
-          console.log('✅ 모델이 AR 앵커에 추가됨');
+          console.log('✅ 모델이 AR 앵커에 추가됨 (크기:', scale, ')');
           setDebugInfo(`AR 모델 준비 완료! ${threeIcosaLoaded ? '(Tilt Brush)' : '(기본)'}`);
           
           resolve();
@@ -175,18 +200,100 @@ export default function ARViewer({
     });
   }, [modelPath]);
 
+  // ✨ DesktopViewer 방식의 완전한 리소스 정리
+  const performCompleteCleanup = useCallback(() => {
+    const currentRenderId = renderIdRef.current;
+    console.log(`🧹 ARViewer 완전한 정리 시작 [${currentRenderId}]`);
+    
+    // 모든 타이머 정리
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (rescanTimeoutRef.current) {
+      clearTimeout(rescanTimeoutRef.current);
+      rescanTimeoutRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    // MindAR 인스턴스 완전 정리
+    const mindarInstance = mindarInstanceRef.current;
+    if (mindarInstance) {
+      try {
+        mindarInstance.stop();
+        if (mindarInstance.renderer) {
+          mindarInstance.renderer.dispose();
+          mindarInstance.renderer.forceContextLoss();
+        }
+        
+        // Scene 메모리 정리
+        const scene = mindarInstance.scene;
+        if (scene) {
+          scene.traverse((object: THREE.Object3D) => {
+            if (object instanceof THREE.Mesh) {
+              object.geometry?.dispose();
+              const materials = Array.isArray(object.material) ? object.material : [object.material];
+              materials.forEach((material: THREE.Material) => material?.dispose());
+            }
+          });
+          scene.clear();
+        }
+      } catch (error) {
+        console.warn('MindAR 정리 중 오류:', error);
+      }
+      mindarInstanceRef.current = null;
+    }
+    
+    // Scene ref 정리
+    const scene = sceneRef.current;
+    if (scene) {
+      scene.traverse(object => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry?.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach(material => material?.dispose());
+        }
+      });
+      scene.clear();
+      sceneRef.current = null;
+    }
+    
+    // 스크립트 정리
+    document.getElementById(SCRIPT_ID_IMPORT_MAP)?.remove();
+    document.getElementById(SCRIPT_ID_MODULE)?.remove();
+    
+    // 전역 객체 정리
+    if (window.MindAR_THREE) window.MindAR_THREE = undefined;
+    if (window.MindAR_MindARThree) window.MindAR_MindARThree = undefined;
+    if (window.MindAR_GLTFLoader) window.MindAR_GLTFLoader = undefined;
+
+    // 컨테이너 정리
+    if (containerRef.current) {
+      containerRef.current.innerHTML = '';
+    }
+    
+    console.log(`✅ ARViewer 완전한 정리 완료 [${currentRenderId}]`);
+  }, [SCRIPT_ID_IMPORT_MAP, SCRIPT_ID_MODULE]);
+
   const initializeMindARSession = useCallback(async () => {
     markerFoundRef.current = false;
     await ensureMindARScriptsLoaded();
     const MindARThree = window.MindAR_MindARThree;
     if (!containerRef.current || !MindARThree) throw new Error("MindAR 초기화 준비 안됨");
+    
     const mindarThree = new MindARThree({
       container: containerRef.current,
       imageTargetSrc: '/markers/qr-marker.mind',
     });
     mindarInstanceRef.current = mindarThree;
+    sceneRef.current = mindarThree.scene;
+    
     const { renderer, scene, camera } = mindarThree;
     const anchor = mindarThree.addAnchor(0);
+    
     anchor.onTargetFound = () => {
       markerFoundRef.current = true;
       setIsScanning(false);
@@ -210,58 +317,49 @@ export default function ARViewer({
       markerLostTimeRef.current = Date.now();
       setDebugInfo('마커를 다시 스캔해주세요...');
       
-      // 마커를 잃은 후 일정 시간이 지나면 팝업 표시
+      // 마커를 잃은 후 3초 뒤 팝업 표시
       rescanTimeoutRef.current = setTimeout(() => {
         if (markerLostTimeRef.current && Date.now() - markerLostTimeRef.current > 3000) {
           setShowTimeoutPopup(true);
         }
       }, 3000);
     };
+    
     await loadModelForMindAR(anchor.group);
     await mindarThree.start();
+    
     // 초기 마커 찾기 타임아웃 (5초)
     timeoutRef.current = setTimeout(() => {
       if (!markerFoundRef.current) {
         setShowTimeoutPopup(true);
       }
     }, 5000);
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+    
+    // 애니메이션 루프
+    const animate = () => {
+      animationFrameRef.current = requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    };
+    animate();
   }, [ensureMindARScriptsLoaded, loadModelForMindAR]);
 
-  // 🔧 이슈 3: 뒤로가기 버튼 개선
+  // ✨ 개선된 뒤로가기 핸들러 (DesktopViewer 방식)
   const handleBackClick = useCallback(() => {
     console.log('🔙 뒤로가기 버튼 클릭');
     
-    // 모든 타이머 정리
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    if (rescanTimeoutRef.current) {
-      clearTimeout(rescanTimeoutRef.current);
-      rescanTimeoutRef.current = null;
-    }
+    // 완전한 정리 수행
+    performCompleteCleanup();
     
-    // MindAR 세션 정리
-    if (mindarInstanceRef.current) {
-      mindarInstanceRef.current.stop();
-      mindarInstanceRef.current = null;
-    }
-    
-    // 상태 초기화
-    setStatus('loading');
-    setShowTimeoutPopup(false);
-    setIsScanning(true);
-    markerFoundRef.current = false;
-    markerLostTimeRef.current = null;
+    // 상태 완전 초기화
+    resetAllStates();
     
     // 부모 컴포넌트 콜백 호출
     if (onBackPressed) {
       onBackPressed();
     }
-  }, [onBackPressed]);
+  }, [onBackPressed, performCompleteCleanup, resetAllStates]);
 
-  // 🔧 이슈 4: 재시도 로직 개선
+  // ✨ 개선된 재시도 핸들러
   const handleRetryScan = useCallback(() => {
     console.log('🔄 재시도 버튼 클릭');
     setShowTimeoutPopup(false);
@@ -269,7 +367,7 @@ export default function ARViewer({
     markerFoundRef.current = false;
     markerLostTimeRef.current = null;
     
-    // 모든 타이머 정리
+    // 타이머만 정리하고 새로 설정
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
@@ -289,104 +387,82 @@ export default function ARViewer({
     setDebugInfo('마커를 스캔해주세요...');
   }, []);
 
-  // 🔧 이슈 5: 컴포넌트 생명주기 개선
-  const initializeMobileAR = useCallback(async (): Promise<void> => {
+  // ✨ DesktopViewer 방식 초기화 함수
+  const initializeMobileAR = useCallback(() => {
     try {
       console.log('📱 모바일 AR 초기화 시작');
       setDebugInfo('MindAR 스크립트 로딩 중...');
       
-      await initializeMindARSession();
-      
-      setStatus('ar-active');
-      setDebugInfo('MindAR AR 모드 활성화 완료!');
-      
-      if (onLoadComplete) {
-        onLoadComplete();
-      }
-      
-      console.log('🎉 모바일 AR 초기화 완료');
+      // Promise 기반 초기화를 then으로 처리 (DesktopViewer 방식)
+      initializeMindARSession()
+        .then(() => {
+          setStatus('ar-active');
+          setDebugInfo('MindAR AR 모드 활성화 완료!');
+          if (onLoadComplete) {
+            onLoadComplete();
+          }
+          console.log('🎉 모바일 AR 초기화 완료');
+        })
+        .catch((error: unknown) => {
+          console.error('❌ 모바일 AR 초기화 실패:', error);
+          const errorMsg = error instanceof Error ? error.message : '알 수 없는 오류';
+          setErrorMessage(errorMsg);
+          setStatus('error');
+          setDebugInfo(`모바일 AR 실패: ${errorMsg}`);
+          if (onLoadError) {
+            onLoadError(errorMsg);
+          }
+        });
+        
     } catch (error) {
-      console.error('❌ 모바일 AR 초기화 실패:', error);
-      const errorMsg = error instanceof Error ? error.message : '알 수 없는 오류';
+      const errorMsg = error instanceof Error ? error.message : String(error);
       setErrorMessage(errorMsg);
       setStatus('error');
-      setDebugInfo(`모바일 AR 실패: ${errorMsg}`);
-      
       if (onLoadError) {
         onLoadError(errorMsg);
       }
     }
+    
+    // DesktopViewer 방식: cleanup 함수 반환
+    return () => {
+      // cleanup 로직이 필요한 경우 여기에 추가
+    };
   }, [initializeMindARSession, onLoadComplete, onLoadError]);
 
+  // ✨ DesktopViewer 방식 useEffect
   useEffect(() => {
     if (deviceType !== 'mobile' || !containerRef.current || initializationRef.current) {
       return;
     }
 
     initializationRef.current = true;
-    const currentContainer = containerRef.current;
     const currentRenderId = renderIdRef.current;
     
     console.log(`✅ ARViewer 초기화 시작 [${currentRenderId}]`);
     
-    initializeMobileAR();
+    const cleanupInit = initializeMobileAR();
 
     return () => {
-      console.log(`🧹 ARViewer 완벽 정리 시작 [${currentRenderId}]`);
+      console.log(`🧹 ARViewer useEffect cleanup [${currentRenderId}]`);
       
-      // 모든 타이머 정리
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      if (rescanTimeoutRef.current) {
-        clearTimeout(rescanTimeoutRef.current);
-        rescanTimeoutRef.current = null;
-      }
+      // 초기화 cleanup 실행
+      if (cleanupInit) cleanupInit();
       
-      // MindAR 인스턴스 정리
-      const mindarInstance = mindarInstanceRef.current;
-      if (mindarInstance) {
-        mindarInstance.stop();
-        if (mindarInstance.renderer) {
-          mindarInstance.renderer.dispose();
-          mindarInstance.renderer.forceContextLoss();
-        }
-        mindarInstance.scene.traverse((object: THREE.Object3D) => {
-          if (object instanceof THREE.Mesh) {
-            object.geometry?.dispose();
-            const materials = Array.isArray(object.material) ? object.material : [object.material];
-            materials.forEach((material: THREE.Material) => material?.dispose());
-          }
-        });
-      }
-      mindarInstanceRef.current = null;
+      // 완전한 정리 수행
+      performCompleteCleanup();
       
-      // 스크립트 정리
-      document.getElementById(SCRIPT_ID_IMPORT_MAP)?.remove();
-      document.getElementById(SCRIPT_ID_MODULE)?.remove();
-      
-      // 전역 객체 정리
-      if (window.MindAR_THREE) window.MindAR_THREE = undefined;
-      if (window.MindAR_MindARThree) window.MindAR_MindARThree = undefined;
-      if (window.MindAR_GLTFLoader) window.MindAR_GLTFLoader = undefined;
-
-      // 컨테이너 정리
-      if (currentContainer) {
-        currentContainer.innerHTML = '';
-      }
-      
+      // 초기화 플래그 리셋
       initializationRef.current = false;
       cleanupRef.current = true;
     };
-  }, [deviceType, initializeMobileAR, SCRIPT_ID_IMPORT_MAP, SCRIPT_ID_MODULE]);
+  }, [deviceType, initializeMobileAR, performCompleteCleanup]);
 
   return (
     <div className="absolute inset-0 w-full h-full">
-      {/* 🔧 이슈 3: 뒤로가기 버튼 개선 */}
+      {/* ✨ 개선된 뒤로가기 버튼 (z-index 최상위) */}
       <button
         onClick={handleBackClick}
-        className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors"
+        className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-[9999] transition-colors"
         aria-label="뒤로가기"
       >
         <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,14 +470,16 @@ export default function ARViewer({
         </svg>
       </button>
 
-      {/* 🔧 이슈 5: 카메라 컨테이너 전체 화면 사용 */}
+      {/* ✨ 이슈 4 해결: 카메라 컨테이너 좌우 꽉 차게 */}
       <div
         ref={containerRef}
         className="absolute inset-0 w-full h-full"
         style={{ 
           backgroundColor: status === 'ar-active' ? 'transparent' : '#000000',
           width: '100vw',
-          height: '100vh'
+          height: '100vh',
+          left: 0,
+          right: 0
         }}
       />
       
@@ -432,9 +510,9 @@ export default function ARViewer({
         </div>
       )}
 
-      {/* 🔧 이슈 2: 팝업 z-index 최상위 설정 및 스캔 중지 */}
+      {/* ✨ 이슈 2 해결: 스캔 팝업 z-index 최상위 (9999) */}
       {showTimeoutPopup && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl text-center">
             <div className="text-4xl mb-4">
               {markerFoundRef.current ? '🔍' : '⏱️'}
