@@ -556,6 +556,25 @@ export default function ARViewer({
       // 🔧 99% 로딩 문제 해결: 완전 리셋 사용
       if (cleanupInit) cleanupInit();
       performCompleteReset();
+      
+      // 🔧 추가: DOM에서 MindAR 관련 요소 완전 제거
+      setTimeout(() => {
+        const mindArElements = document.querySelectorAll(
+          'canvas[style*="position: absolute"], ' +
+          '[class*="mindar"], ' +
+          '[id*="mindar"], ' +
+          'div[style*="pointer-events: none"]'
+        );
+        mindArElements.forEach(el => {
+          try {
+            if (el && el.parentNode) {
+              el.parentNode.removeChild(el);
+            }
+          } catch (e) {
+            console.warn('MindAR DOM 요소 제거 실패:', e);
+          }
+        });
+      }, 100);
     };
   }, [deviceType, initializeMobileAR, performCompleteReset]);
 

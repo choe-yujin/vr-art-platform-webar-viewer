@@ -12,6 +12,10 @@ export default function ARViewerPage() {
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null);
   const [showARErrorPopup, setShowARErrorPopup] = useState(false);
   
+  // 🔧 고유 키로 컴포넌트 강제 재렌더링 보장
+  const [arViewerKey, setARViewerKey] = useState(0);
+  const [desktopViewerKey, setDesktopViewerKey] = useState(0);
+  
   const deviceDetectedRef = useRef(false);
 
   useEffect(() => {
@@ -40,6 +44,9 @@ export default function ARViewerPage() {
   
   const handleArButtonClick = async () => {
     setUserChoice('ar');
+    // 🔧 AR 뷰어 새로운 키로 완전 재초기화
+    setARViewerKey(prev => prev + 1);
+    
     if (navigator.permissions) {
       try {
         const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
@@ -65,8 +72,24 @@ export default function ARViewerPage() {
   };
 
   const handleBackFromAR = () => {
+    console.log('🔙 ARViewer에서 뒤로가기');
+    // 🔧 완전한 상태 초기화
     setUserChoice(null);
     setCameraPermission(null);
+    setShowARErrorPopup(false);
+    // AR 뷰어 키 증가로 완전 언마운트 보장
+    setARViewerKey(prev => prev + 1);
+  };
+
+  const handleSwitchTo3D = () => {
+    console.log('🎨 AR에서 3D 뷰어로 전환');
+    // 🔧 AR 완전 정리 후 3D 뷰어로 전환
+    setUserChoice('desktop');
+    setCameraPermission(null);
+    setShowARErrorPopup(false);
+    // 양쪽 뷰어 모두 새로운 키로 재초기화
+    setARViewerKey(prev => prev + 1);
+    setDesktopViewerKey(prev => prev + 1);
   };
 
   const shouldRenderDesktopViewer = deviceType === 'desktop';
@@ -86,7 +109,10 @@ export default function ARViewerPage() {
 
       {shouldRenderDesktopViewer && (
         <div className="w-full h-full relative">
-          <DesktopViewer modelPath="/sample.glb" />
+          <DesktopViewer 
+            key={`desktop-${desktopViewerKey}`}
+            modelPath="/sample.glb" 
+          />
         </div>
       )}
 
@@ -100,7 +126,13 @@ export default function ARViewerPage() {
               <button onClick={handleArButtonClick} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-3 rounded-lg font-medium">
                 📸 카메라로 AR 보기
               </button>
-              <button onClick={() => setUserChoice('desktop')} className="w-full bg-gray-600 hover:bg-gray-700 transition-colors px-4 py-3 rounded-lg font-medium">
+              <button 
+                onClick={() => {
+                  setUserChoice('desktop');
+                  setDesktopViewerKey(prev => prev + 1);
+                }} 
+                className="w-full bg-gray-600 hover:bg-gray-700 transition-colors px-4 py-3 rounded-lg font-medium"
+              >
                 🎨 3D 뷰어로 보기
               </button>
             </div>
@@ -139,7 +171,14 @@ export default function ARViewerPage() {
               <h3 className="text-xl font-bold text-gray-800 mb-2">AR 뷰어 오류</h3>
               <p className="text-gray-600 mb-6">시스템 오류로 AR 뷰어를 사용할 수 없습니다. 3D 뷰어로 작품을 감상해보세요!</p>
               <div className="space-y-3">
-                <button onClick={() => { setShowARErrorPopup(false); setUserChoice('desktop'); }} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg font-medium">
+                <button 
+                  onClick={() => { 
+                    setShowARErrorPopup(false); 
+                    setUserChoice('desktop');
+                    setDesktopViewerKey(prev => prev + 1);
+                  }} 
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg font-medium"
+                >
                   🎨 3D 뷰어로 감상하기
                 </button>
                 <button onClick={handleBackFromAR} className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
@@ -151,18 +190,37 @@ export default function ARViewerPage() {
         </div>
       )}
 
+      {/* 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장 */}
       {shouldRenderARViewer && (
         <div className="w-full h-full">
-          <ARViewer modelPath="/sample.glb" deviceType="mobile" onLoadError={handleARError} onBackPressed={handleBackFromAR} onSwitchTo3D={() => setUserChoice('desktop')} />
+          <ARViewer 
+            key={`ar-${arViewerKey}`}
+            modelPath="/sample.glb" 
+            deviceType="mobile" 
+            onLoadError={handleARError} 
+            onBackPressed={handleBackFromAR} 
+            onSwitchTo3D={handleSwitchTo3D}
+          />
         </div>
       )}
 
+      {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
       {shouldRenderMobileDesktopViewer && (
         <div className="w-full h-full relative">
-          <button onClick={handleBackFromAR} className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors" aria-label="뒤로가기">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          <button 
+            onClick={handleBackFromAR} 
+            className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors" 
+            aria-label="뒤로가기"
+          >
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <DesktopViewer modelPath="/sample.glb" autoRotate={true} />
+          <DesktopViewer 
+            key={`mobile-desktop-${desktopViewerKey}`}
+            modelPath="/sample.glb" 
+            autoRotate={true} 
+          />
         </div>
       )}
     </div>
