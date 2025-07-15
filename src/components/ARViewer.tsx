@@ -263,13 +263,14 @@ export default function ARViewer({
     });
   }, [modelPath]);
 
-  // 🔧 99% 로딩 문제 해결: 완벽한 정리
-  const performCompleteCleanup = useCallback(() => {
-    console.log('🧹 ARViewer 완전한 정리 시작');
+  // 🔧 99% 로딩 문제 해결: 더 강력한 전역 상태 초기화
+  const performCompleteReset = useCallback(() => {
+    console.log('🧹 ARViewer 완전 리셋 시작');
     
+    // 1. 모든 정리 작업 수행
     isCleaningUpRef.current = true;
     
-    // 모든 타이머 정리
+    // 2. 모든 타이머 정리
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
@@ -285,7 +286,7 @@ export default function ARViewer({
       animationFrameRef.current = null;
     }
     
-    // MindAR 인스턴스 완전 정리
+    // 3. MindAR 인스턴스 완전 정리
     const mindarInstance = mindarInstanceRef.current;
     if (mindarInstance) {
       try {
@@ -315,18 +316,33 @@ export default function ARViewer({
       mindarInstanceRef.current = null;
     }
     
-    // 컨테이너 정리
+    // 4. 컨테이너 정리
     if (containerRef.current) {
       containerRef.current.innerHTML = '';
     }
     
-    // 전역 상태 정리
+    // 5. 전역 상태 정리
     clearAllGlobalState();
     
-    // 플래그 리셋
-    isInitializedRef.current = false;
+    // 6. 모든 상태 초기화
+    setStatus('loading');
+    setErrorMessage('');
+    setDebugInfo('AR 뷰어 초기화 중...');
+    setThreeIcosaStatus('loading');
+    setShowTimeoutPopup(false);
+    setIsScanning(true);
     
-    console.log('✅ ARViewer 완전한 정리 완료');
+    // 7. ref 상태 초기화
+    markerFoundRef.current = false;
+    markerLostTimeRef.current = null;
+    initializationRef.current = false;
+    isInitializedRef.current = false;
+    isCleaningUpRef.current = false;
+    
+    // 8. 새로운 렌더 ID 생성 (완전 새로운 세션)
+    renderIdRef.current = Math.random().toString(36).substr(2, 9);
+    
+    console.log('✅ ARViewer 완전 리셋 완료');
   }, [clearAllGlobalState]);
 
   // MindAR 세션 초기화
@@ -359,6 +375,15 @@ export default function ARViewer({
     isInitializedRef.current = true;
     
     const { renderer, scene, camera } = mindarThree;
+    
+    // 🔧 렌더러 크기 올바르게 설정 (카메라 중앙 정렬 도움)
+    const canvas = renderer.domElement;
+    canvas.style.display = 'block';
+    canvas.style.margin = '0 auto';
+    canvas.style.maxWidth = '100%';
+    canvas.style.maxHeight = '100%';
+    canvas.style.objectFit = 'cover';
+    
     const anchor = mindarThree.addAnchor(0);
     
     anchor.onTargetFound = () => {
@@ -385,10 +410,25 @@ export default function ARViewer({
       markerLostTimeRef.current = Date.now();
       setDebugInfo('마커를 다시 스캔해주세요...');
       
+      // 🔧 팝업 표시시 스캐너 동작 중지
       rescanTimeoutRef.current = setTimeout(() => {
         if (isCleaningUpRef.current) return;
         if (markerLostTimeRef.current && Date.now() - markerLostTimeRef.current > 3000) {
+          // 팝업 표시 시 스캔 동작 완전 중지
+          setIsScanning(false);
           setShowTimeoutPopup(true);
+          // MindAR 인스턴스의 렌더링 일시 중지
+          if (mindarInstanceRef.current) {
+            try {
+              // 렌더링 루프 중지
+              if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+              }
+            } catch (err) {
+              console.warn('렌더링 중지 실패:', err);
+            }
+          }
         }
       }, 3000);
     };
@@ -420,24 +460,13 @@ export default function ARViewer({
   const handleBackClick = useCallback(() => {
     console.log('🔙 뒤로가기 버튼 클릭');
     
-    performCompleteCleanup();
-    
-    // 상태 초기화
-    setStatus('loading');
-    setErrorMessage('');
-    setDebugInfo('AR 뷰어 초기화 중...');
-    setThreeIcosaStatus('loading');
-    setShowTimeoutPopup(false);
-    setIsScanning(true);
-    
-    markerFoundRef.current = false;
-    markerLostTimeRef.current = null;
-    initializationRef.current = false;
+    // 🔧 99% 로딩 문제 해결: 완전 리셋 사용
+    performCompleteReset();
     
     if (onBackPressed) {
       onBackPressed();
     }
-  }, [performCompleteCleanup, onBackPressed]);
+  }, [performCompleteReset, onBackPressed]);
 
   // 재시도 핸들러
   const handleRetryScan = useCallback(() => {
@@ -456,14 +485,26 @@ export default function ARViewer({
       rescanTimeoutRef.current = null;
     }
     
+    // 🔧 렌더링 루프 재시작
+    if (mindarInstanceRef.current && !animationFrameRef.current) {
+      const { renderer, scene, camera } = mindarInstanceRef.current;
+      const animate = () => {
+        if (isCleaningUpRef.current || showTimeoutPopup) return;
+        animationFrameRef.current = requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      };
+      animate();
+    }
+    
     timeoutRef.current = setTimeout(() => {
       if (!markerFoundRef.current) {
         setShowTimeoutPopup(true);
+        setIsScanning(false);
       }
     }, 5000);
     
     setDebugInfo('마커를 스캔해주세요...');
-  }, []);
+  }, [showTimeoutPopup]);
 
   // 초기화 함수
   const initializeMobileAR = useCallback(() => {
@@ -512,12 +553,11 @@ export default function ARViewer({
     return () => {
       console.log(`🧹 ARViewer useEffect cleanup [${currentRenderId}]`);
       
+      // 🔧 99% 로딩 문제 해결: 완전 리셋 사용
       if (cleanupInit) cleanupInit();
-      performCompleteCleanup();
-      
-      initializationRef.current = false;
+      performCompleteReset();
     };
-  }, [deviceType, initializeMobileAR, performCompleteCleanup]);
+  }, [deviceType, initializeMobileAR, performCompleteReset]);
 
   return (
     <>
@@ -543,7 +583,12 @@ export default function ARViewer({
             left: 0,
             width: '100%',
             height: '100%',
-            backgroundColor: status === 'ar-active' ? 'transparent' : '#000000'
+            backgroundColor: status === 'ar-active' ? 'transparent' : '#000000',
+            // 🔧 카메라 영역 중앙 정렬 문제 해결
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            overflow: 'hidden'
           }}
         />
       </div>
@@ -755,6 +800,19 @@ export default function ARViewer({
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
+        
+        /* 🔧 팝업 표시시 MindAR 스캐너 가이드 숨기기 */
+        ${showTimeoutPopup ? `
+        .mindar-ui-overlay,
+        .mindar-ui-scanning,
+        [class*="mindar"][class*="ui"],
+        [class*="scanning"],
+        canvas + div {
+          display: none !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+        ` : ''}
         `}
       </style>
     </>
