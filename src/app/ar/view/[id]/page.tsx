@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import DesktopViewer from '@/components/DesktopViewer';
 import ARViewer from '@/components/ARViewer';
 
@@ -17,7 +17,47 @@ export default function ARViewerPage() {
   const [desktopViewerKey, setDesktopViewerKey] = useState(0);
   
   const deviceDetectedRef = useRef(false);
+  const pageCleanupRef = useRef(false);
 
+  // 🔧 React Hook 경고 해결: useCallback으로 안정적인 참조 제공
+  const forcePageCleanup = useCallback(() => {
+    if (pageCleanupRef.current) return;
+    pageCleanupRef.current = true;
+    
+    console.log('🧹 페이지 레벨 정리 시작 (캐시 보존)');
+    
+    // 🎯 핵심 변경: 캐시 삭제 대신 DOM 요소만 정리
+    setTimeout(() => {
+      // MindAR DOM 요소만 제거 (캐시는 보존)
+      const mindArElements = document.querySelectorAll(
+        '[class*="mindar"], [id*="mindar"]'
+      );
+      mindArElements.forEach(el => {
+        try {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        } catch (error) {
+          console.warn('MindAR 요소 제거 실패:', error);
+        }
+      });
+      
+      console.log('✅ 페이지 레벨 정리 완료 (캐시 보존됨)');
+    }, 100);
+  }, []); // 🔧 빈 의존성 배열로 안정적인 참조 보장
+
+  // 🔧 페이지 언마운트시 cleanup - 의존성 문제 해결
+  useEffect(() => {
+    // 🔧 cleanup 함수에서 현재 시점의 함수 참조를 복사
+    const currentCleanup = forcePageCleanup;
+    
+    return () => {
+      console.log('🧹 페이지 언마운트 - 정리 수행');
+      currentCleanup();
+    };
+  }, [forcePageCleanup]);
+
+  // 디바이스 감지 로직
   useEffect(() => {
     if (deviceDetectedRef.current) return;
     
@@ -27,7 +67,8 @@ export default function ARViewerPage() {
     setDeviceType(detectedType);
   }, []);
 
-  const requestCameraPermission = async (): Promise<boolean> => {
+  // 카메라 권한 요청 함수
+  const requestCameraPermission = useCallback(async (): Promise<boolean> => {
     try {
       if (!navigator?.mediaDevices?.getUserMedia) {
         throw new Error('이 브라우저는 카메라를 지원하지 않습니다');
@@ -36,16 +77,18 @@ export default function ARViewerPage() {
       stream.getTracks().forEach(track => track.stop());
       setCameraPermission('granted');
       return true;
-    } catch {
+    } catch (permissionError) {
+      console.warn('카메라 권한 요청 실패:', permissionError);
       setCameraPermission('denied');
       return false;
     }
-  };
+  }, []);
   
-  const handleArButtonClick = async () => {
+  // AR 버튼 클릭 핸들러
+  const handleArButtonClick = useCallback(async () => {
     setUserChoice('ar');
-    // 🔧 AR 뷰어 새로운 키로 완전 재초기화
     setARViewerKey(prev => prev + 1);
+    pageCleanupRef.current = false;
     
     if (navigator.permissions) {
       try {
@@ -56,42 +99,62 @@ export default function ARViewerPage() {
           const granted = await requestCameraPermission();
           if (!granted) setUserChoice(null);
         }
-      } catch {
+      } catch (permissionQueryError) {
+        console.warn('권한 상태 조회 실패:', permissionQueryError);
         await requestCameraPermission();
       }
     } else {
       await requestCameraPermission();
     }
-  };
+  }, [requestCameraPermission]);
 
-  const handleARError = (error: string) => {
-    console.error('❌ AR 뷰어 오류:', error);
+  // AR 에러 핸들러
+  const handleARError = useCallback((error: string | Error | unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ AR 뷰어 오류:', errorMessage);
     setShowARErrorPopup(true);
     setUserChoice(null);
     setCameraPermission(null);
-  };
+    forcePageCleanup();
+  }, [forcePageCleanup]);
 
-  const handleBackFromAR = () => {
+  // AR에서 뒤로가기 핸들러
+  const handleBackFromAR = useCallback(() => {
     console.log('🔙 ARViewer에서 뒤로가기');
-    // 🔧 완전한 상태 초기화
     setUserChoice(null);
     setCameraPermission(null);
     setShowARErrorPopup(false);
-    // AR 뷰어 키 증가로 완전 언마운트 보장
     setARViewerKey(prev => prev + 1);
-  };
+    forcePageCleanup();
+  }, [forcePageCleanup]);
 
-  const handleSwitchTo3D = () => {
+  // 3D 뷰어로 전환 핸들러
+  const handleSwitchTo3D = useCallback(() => {
     console.log('🎨 AR에서 3D 뷰어로 전환');
-    // 🔧 AR 완전 정리 후 3D 뷰어로 전환
     setUserChoice('desktop');
     setCameraPermission(null);
     setShowARErrorPopup(false);
-    // 양쪽 뷰어 모두 새로운 키로 재초기화
     setARViewerKey(prev => prev + 1);
     setDesktopViewerKey(prev => prev + 1);
-  };
+    forcePageCleanup();
+  }, [forcePageCleanup]);
 
+  // 데스크톱 모드 선택 핸들러
+  const handleDesktopModeSelect = useCallback(() => {
+    setUserChoice('desktop');
+    setDesktopViewerKey(prev => prev + 1);
+    pageCleanupRef.current = false;
+  }, []);
+
+  // 에러 팝업에서 3D 뷰어로 이동 핸들러
+  const handleErrorPopupToDesktop = useCallback(() => {
+    setShowARErrorPopup(false);
+    setUserChoice('desktop');
+    setDesktopViewerKey(prev => prev + 1);
+    pageCleanupRef.current = false;
+  }, []);
+
+  // 렌더링 조건
   const shouldRenderDesktopViewer = deviceType === 'desktop';
   const shouldRenderARViewer = deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'granted';
   const shouldRenderMobileDesktopViewer = deviceType === 'mobile' && userChoice === 'desktop';
@@ -123,14 +186,14 @@ export default function ARViewerPage() {
             <p className="text-lg font-medium mb-2">어떻게 작품을 감상하시겠습니까?</p>
             <p className="text-sm opacity-75 mb-4">AR로 현실 공간에 배치하거나, 3D 뷰어로 감상할 수 있습니다</p>
             <div className="space-y-3 mb-4">
-              <button onClick={handleArButtonClick} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-3 rounded-lg font-medium">
+              <button 
+                onClick={handleArButtonClick} 
+                className="w-full bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-3 rounded-lg font-medium"
+              >
                 📸 카메라로 AR 보기
               </button>
               <button 
-                onClick={() => {
-                  setUserChoice('desktop');
-                  setDesktopViewerKey(prev => prev + 1);
-                }} 
+                onClick={handleDesktopModeSelect}
                 className="w-full bg-gray-600 hover:bg-gray-700 transition-colors px-4 py-3 rounded-lg font-medium"
               >
                 🎨 3D 뷰어로 보기
@@ -172,11 +235,7 @@ export default function ARViewerPage() {
               <p className="text-gray-600 mb-6">시스템 오류로 AR 뷰어를 사용할 수 없습니다. 3D 뷰어로 작품을 감상해보세요!</p>
               <div className="space-y-3">
                 <button 
-                  onClick={() => { 
-                    setShowARErrorPopup(false); 
-                    setUserChoice('desktop');
-                    setDesktopViewerKey(prev => prev + 1);
-                  }} 
+                  onClick={handleErrorPopupToDesktop}
                   className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg font-medium"
                 >
                   🎨 3D 뷰어로 감상하기
@@ -190,7 +249,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장 */}
+      {/* 🎯 캐시 보존 방식의 AR 뷰어 */}
       {shouldRenderARViewer && (
         <div className="w-full h-full">
           <ARViewer 
@@ -204,7 +263,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
+      {/* 모바일 3D 뷰어 */}
       {shouldRenderMobileDesktopViewer && (
         <div className="w-full h-full relative">
           <button 
