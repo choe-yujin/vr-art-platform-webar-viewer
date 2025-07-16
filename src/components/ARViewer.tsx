@@ -436,7 +436,7 @@ export default function ARViewer({
         (progress: ProgressEvent<EventTarget>) => {
           if (isCleaningUpRef.current) return;
           if (progress.total > 0) {
-            const percent = Math.min(Math.round((progress.loaded / progress.total) * 100), 99);
+            const percent = Math.min(Math.round((progress.loaded / progress.total) * 100), 95);
             setDebugInfo(`모델 로딩... ${percent}%`);
           }
         },
@@ -584,10 +584,17 @@ export default function ARViewer({
     
     await mindarThree.start();
     
+    if (isCleaningUpRef.current) return;
+    
+    // 🎯 핵심: AR 준비 완료 상태 전환
+    setDebugInfo('AR 준비 완료! 마커를 스캔해주세요...');
+    
+    // 🎯 핵심: 5초 후 마커 찾기 타임아웃 시작
     timeoutRef.current = setTimeout(() => {
       if (isCleaningUpRef.current) return;
       if (!markerFoundRef.current) {
         setShowTimeoutPopup(true);
+        setIsScanning(false);
       }
     }, 5000);
     
@@ -597,7 +604,13 @@ export default function ARViewer({
       resourceManager.setAnimationId(frameId);
       renderer.render(scene, camera);
     };
-    animate();
+    
+    // 🎯 핵심: 애니메이션 시작 전 잠시 대기
+    setTimeout(() => {
+      if (!isCleaningUpRef.current) {
+        animate();
+      }
+    }, 100);
     
     console.log('✅ MindAR 세션 초기화 완료');
   }, [loadMindARScripts, loadModelForMindAR, initializeResourceManager]);
@@ -661,8 +674,9 @@ export default function ARViewer({
     initializeMindARSession()
       .then(() => {
         if (isCleaningUpRef.current) return;
+        // 🎯 핵심: AR 활성화 상태로 전환
         setStatus('ar-active');
-        setDebugInfo('MindAR AR 모드 활성화 완료!');
+        setDebugInfo('AR 활성화 완료! 마커를 스캔해주세요...');
         if (onLoadComplete) {
           onLoadComplete();
         }
