@@ -146,38 +146,18 @@ export default function ARViewerPage() {
 
       {/* 🖥️ 데스크톱 3D 뷰어 */}
       {shouldRenderDesktopViewer && modelPath && artwork && (
-        <div className="w-full h-full relative">
-          {/* 작품 정보 표시 */}
-          <div className="absolute top-4 left-4 bg-black/70 text-white p-4 rounded-lg z-10 max-w-sm">
-            <h3 className="font-bold text-xl mb-2">{artwork.title}</h3>
-            <div className="text-sm space-y-1">
-              <p className="opacity-90">
-                <span className="text-blue-300">작가:</span> {artwork.user.nickname}
-              </p>
-              {artwork.description && (
-                <p className="text-xs mt-3 opacity-70 leading-relaxed">
-                  {artwork.description}
-                </p>
-              )}
-              <div className="flex items-center gap-4 mt-3 text-xs opacity-60">
-                <span>👁️ {artwork.viewCount?.toLocaleString() || 0}</span>
-                <span>❤️ {artwork.favoriteCount?.toLocaleString() || 0}</span>
-              </div>
-            </div>
-          </div>
-          
-          <DesktopViewer 
-            key={`desktop-${desktopViewerKey}`}
-            modelPath={modelPath}
-          />
-        </div>
+        <DesktopViewer 
+          key={`desktop-${desktopViewerKey}`}
+          modelPath={modelPath}
+          artwork={artwork}
+        />
       )}
 
       {/* 📱 모바일 선택 화면 */}
       {deviceType === 'mobile' && !userChoice && artwork && modelPath && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6 max-w-sm">
-            {/* 작품 정보 미리보기 */}
+            {/* 🔧 작품 정보 미리보기 (실제 데이터 사용) */}
             <div className="bg-black/50 rounded-lg p-4 mb-6 text-left">
               <h2 className="font-bold text-xl mb-2">{artwork.title}</h2>
               <p className="text-sm opacity-90 mb-1">
@@ -192,8 +172,14 @@ export default function ARViewerPage() {
                 </p>
               )}
               <div className="flex items-center gap-4 mt-3 text-xs opacity-60">
-                <span>👁️ {artwork.viewCount?.toLocaleString() || 0}</span>
-                <span>❤️ {artwork.favoriteCount?.toLocaleString() || 0}</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-red-400">❤️</span>
+                  <span>{artwork.favoriteCount?.toLocaleString() || 0}</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="text-blue-400">👁️</span>
+                  <span>{artwork.viewCount?.toLocaleString() || 0}</span>
+                </span>
               </div>
             </div>
             
@@ -288,26 +274,6 @@ export default function ARViewerPage() {
       {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
       {shouldRenderMobileDesktopViewer && modelPath && artwork && (
         <div className="w-full h-full relative">
-          {/* 작품 정보 표시 */}
-          <div className="absolute top-16 left-4 bg-black/70 text-white p-3 rounded-lg z-10 max-w-sm">
-            <h3 className="font-bold text-lg mb-1">{artwork.title}</h3>
-            <p className="text-sm opacity-90">
-              <span className="text-blue-300">작가:</span> {artwork.user.nickname}
-            </p>
-            {artwork.description && (
-              <p className="text-xs mt-2 opacity-70 leading-relaxed">
-                {artwork.description.length > 80 
-                  ? `${artwork.description.substring(0, 80)}...`
-                  : artwork.description
-                }
-              </p>
-            )}
-            <div className="flex items-center gap-3 mt-2 text-xs opacity-60">
-              <span>👁️ {artwork.viewCount?.toLocaleString() || 0}</span>
-              <span>❤️ {artwork.favoriteCount?.toLocaleString() || 0}</span>
-            </div>
-          </div>
-          
           <button 
             onClick={handleBackFromAR} 
             className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors" 
@@ -320,6 +286,7 @@ export default function ARViewerPage() {
           <DesktopViewer 
             key={`mobile-desktop-${desktopViewerKey}`}
             modelPath={modelPath}
+            artwork={artwork}
             autoRotate={true} 
           />
         </div>

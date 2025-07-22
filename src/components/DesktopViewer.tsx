@@ -4,9 +4,11 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { ArtworkResponse } from '@/utils/api';
 
 interface DesktopViewerProps {
   modelPath: string;
+  artwork?: ArtworkResponse | null;
   onLoadComplete?: () => void;
   onLoadError?: (error: string) => void;
   autoRotate?: boolean;
@@ -15,6 +17,7 @@ interface DesktopViewerProps {
 
 export default function DesktopViewer({ 
   modelPath, 
+  artwork,
   onLoadComplete, 
   onLoadError,
   autoRotate = true,
@@ -90,7 +93,6 @@ export default function DesktopViewer({
     }
   }, [modelPath]);
 
-  // ✨ 오류 해결: async 키워드 제거
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
     try {
@@ -123,7 +125,6 @@ export default function DesktopViewer({
       controls.autoRotate = autoRotate;
       controls.autoRotateSpeed = rotationSpeed * 5;
 
-      // ✨ 오류 해결: await 대신 .then()으로 비동기 처리
       loadModelForDesktop(scene, camera, controls)
         .then(() => {
           setStatus('active');
@@ -158,7 +159,6 @@ export default function DesktopViewer({
       onLoadError?.(errorMsg);
     }
     
-    // ✨ 이제 이 함수는 항상 cleanup 함수를 동기적으로 반환합니다.
     return () => {
       if (resizeHandler) {
         window.removeEventListener('resize', resizeHandler);
@@ -171,7 +171,7 @@ export default function DesktopViewer({
     initializationRef.current = true;
     
     const currentRenderId = renderIdRef.current;
-    const currentContainer = containerRef.current; // ESLint 경고 해결: ref 값 복사
+    const currentContainer = containerRef.current;
     console.log(`✅ DesktopViewer 초기화 시작 [${currentRenderId}]`);
     const cleanupResize = initializeDesktop3D();
 
@@ -201,7 +201,7 @@ export default function DesktopViewer({
         rendererRef.current.forceContextLoss();
         rendererRef.current = null;
       }
-      if (currentContainer) { // 복사된 값 사용
+      if (currentContainer) {
         currentContainer.innerHTML = '';
       }
       
@@ -289,12 +289,26 @@ export default function DesktopViewer({
         </div>
       )}
       
-{/* 🔧 작품 정보 (왼쪽 하단으로 변경) */}
-      {status === 'active' && (
-        <div className="absolute bottom-6 left-6 bg-black/70 backdrop-blur-md text-white p-4 rounded-xl z-10">
+      {/* 🔧 작품 정보 (왼쪽 하단으로 변경, 실제 데이터 사용) */}
+      {status === 'active' && artwork && (
+        <div className="absolute bottom-6 left-6 bg-black/70 backdrop-blur-md text-white p-4 rounded-xl z-10 max-w-md">
           <div className="text-left">
-            <p className="font-bold text-lg">작품명: 폴라리스</p>
-            <p className="text-sm opacity-75 mt-1">VR로 창작된 3D 아트워크</p>
+            <h2 className="font-bold text-xl mb-2">{artwork.title}</h2>
+            {artwork.description && (
+              <p className="text-sm opacity-75 mb-3 leading-relaxed">
+                {artwork.description}
+              </p>
+            )}
+            <div className="flex items-center gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-red-400">❤️</span>
+                <span>{artwork.favoriteCount?.toLocaleString() || 0}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-blue-400">👁️</span>
+                <span>{artwork.viewCount?.toLocaleString() || 0}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -328,37 +342,37 @@ export default function DesktopViewer({
         </div>
       )}
       
-      {/* 🔧 작가 정보 모달 */}
-      {showArtistInfo && (
+      {/* 🔧 작가 정보 모달 (실제 데이터 사용) */}
+      {showArtistInfo && artwork && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <div className="text-center">
               <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <span className="text-white text-2xl font-bold">호</span>
+                <span className="text-white text-2xl font-bold">
+                  {artwork.user.nickname.charAt(0).toUpperCase()}
+                </span>
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">호우 (Hou)</h3>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">{artwork.user.nickname}</h3>
               <p className="text-gray-600 mb-4">VR 3D 아티스트</p>
               
-              <div className="space-y-3">
-                <a 
-                  href="https://instagram.com/livingbrush_hou" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center space-x-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white py-2 px-4 rounded-lg hover:from-pink-600 hover:to-purple-600 transition-all"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                  </svg>
-                  <span>@livingbrush_hou</span>
-                </a>
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-left">
+                <h4 className="font-semibold text-gray-800 mb-2">작가 소개</h4>
+                <p className="text-sm text-gray-600">
+                  {artwork.user.nickname === 'test_artist' 
+                    ? 'VR 공간에서 창작하는 3D 아티스트입니다. 새로운 차원의 예술을 탐구하며, VR과 AR을 통해 관람객들과 소통합니다.'
+                    : `${artwork.user.nickname}님은 VR 3D 아티스트로 활동하고 있습니다.`
+                  }
+                </p>
               </div>
               
-              <button 
-                onClick={() => setShowArtistInfo(false)}
-                className="mt-4 w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                닫기
-              </button>
+              <div className="space-y-3">
+                <button 
+                  onClick={() => setShowArtistInfo(false)}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
             </div>
           </div>
         </div>
