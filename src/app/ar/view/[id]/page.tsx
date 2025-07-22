@@ -24,7 +24,7 @@ export default function ARViewerPage() {
   
   // 🔧 고유 키로 컴포넌트 강제 재렌더링 보장
   // const [arViewerKey, setARViewerKey] = useState(0);
-  const [desktopViewerKey, setDesktopViewerKey] = useState(0);
+  const [desktopViewerKey] = useState(0);
   
   const deviceDetectedRef = useRef(false);
 
