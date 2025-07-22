@@ -31,6 +31,7 @@ export default function DesktopViewer({
   const [showArtistInfo, setShowArtistInfo] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
+  const [backgroundDark, setBackgroundDark] = useState<boolean>(true); // 배경색 상태 (true: 검은색, false: 흰색)
   
   const containerRef = useRef<HTMLDivElement>(null);
   const initializationRef = useRef(false);
@@ -105,7 +106,7 @@ export default function DesktopViewer({
       container.innerHTML = '';
       
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x000000);
+      scene.background = new THREE.Color(backgroundDark ? 0x000000 : 0xffffff);
       sceneRef.current = scene;
       
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -164,7 +165,7 @@ export default function DesktopViewer({
         window.removeEventListener('resize', resizeHandler);
       }
     };
-  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError]);
+  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError, backgroundDark]);
 
   useEffect(() => {
     if (initializationRef.current) return;
@@ -208,6 +209,18 @@ export default function DesktopViewer({
       initializationRef.current = false;
     };
   }, [initializeDesktop3D]);
+
+  // 배경색 변경 효과
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.background = new THREE.Color(backgroundDark ? 0x000000 : 0xffffff);
+    }
+  }, [backgroundDark]);
+
+  // 토글 함수
+  const toggleBackground = () => {
+    setBackgroundDark(prev => !prev);
+  };
 
   // 🔧 공유 링크 복사 함수
   const handleCopyLink = async () => {
@@ -310,6 +323,27 @@ export default function DesktopViewer({
               </div>
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* 🔧 배경색 토글 버튼 (오른쪽 상단) */}
+      {status === 'active' && (
+        <div className="fixed top-6 right-6 z-10">
+          <button 
+            onClick={toggleBackground}
+            className="bg-white/20 backdrop-blur-md text-white p-3 rounded-full hover:bg-white/30 transition-all duration-200 shadow-lg"
+            title={backgroundDark ? '흰색 배경으로 변경' : '검은색 배경으로 변경'}
+          >
+            {backgroundDark ? (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
         </div>
       )}
       
