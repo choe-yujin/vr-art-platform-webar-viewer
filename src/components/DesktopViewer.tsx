@@ -106,7 +106,7 @@ export default function DesktopViewer({
       container.innerHTML = '';
       
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(backgroundDark ? 0x000000 : 0xffffff);
+      scene.background = backgroundDark ? new THREE.Color(0x000000) : null;
       sceneRef.current = scene;
       
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -114,9 +114,10 @@ export default function DesktopViewer({
       
       camera.position.set(1, 1, 1);
       
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setClearColor(0x000000, 0); // 투명 배경 설정
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
@@ -213,7 +214,7 @@ export default function DesktopViewer({
   // 배경색 변경 효과
   useEffect(() => {
     if (sceneRef.current) {
-      sceneRef.current.background = new THREE.Color(backgroundDark ? 0x000000 : 0xffffff);
+      sceneRef.current.background = backgroundDark ? new THREE.Color(0x000000) : null;
     }
   }, [backgroundDark]);
 
@@ -328,11 +329,11 @@ export default function DesktopViewer({
       
       {/* 🔧 배경색 토글 버튼 (오른쪽 상단) */}
       {status === 'active' && (
-        <div className="fixed top-6 right-6 z-10">
+        <div className="fixed top-6 right-6 z-30">
           <button 
             onClick={toggleBackground}
             className="bg-white/20 backdrop-blur-md text-white p-3 rounded-full hover:bg-white/30 transition-all duration-200 shadow-lg"
-            title={backgroundDark ? '흰색 배경으로 변경' : '검은색 배경으로 변경'}
+            title={backgroundDark ? '투명 배경으로 변경' : '검은색 배경으로 변경'}
           >
             {backgroundDark ? (
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
