@@ -5,7 +5,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import DesktopViewer from '@/components/DesktopViewer';
-import ARViewer from '@/components/ARViewer';
+// AR 뷰어는 비활성화했지만 코드는 유지
+// import ARViewer from '@/components/ARViewer';
 import { useArtwork } from '@/hooks/useArtwork';
 
 export default function ARViewerPage() {
@@ -16,12 +17,13 @@ export default function ARViewerPage() {
   const { artwork, loading: artworkLoading, error: artworkError, modelPath } = useArtwork(artworkId);
   
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
-  const [userChoice, setUserChoice] = useState<'ar' | 'desktop' | null>(null);
-  const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null);
-  const [showARErrorPopup, setShowARErrorPopup] = useState(false);
+  // AR 기능은 비활성화하고 항상 desktop 뷰어를 사용하도록 설정
+  // const [userChoice, setUserChoice] = useState<'ar' | 'desktop' | null>(null);
+  // const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null);
+  // const [showARErrorPopup, setShowARErrorPopup] = useState(false);
   
   // 🔧 고유 키로 컴포넌트 강제 재렌더링 보장
-  const [arViewerKey, setARViewerKey] = useState(0);
+  // const [arViewerKey, setARViewerKey] = useState(0);
   const [desktopViewerKey, setDesktopViewerKey] = useState(0);
   
   const deviceDetectedRef = useRef(false);
@@ -35,6 +37,7 @@ export default function ARViewerPage() {
     setDeviceType(detectedType);
   }, []);
 
+  /* AR 관련 기능들 - 비활성화했지만 코드는 유지
   const requestCameraPermission = async (): Promise<boolean> => {
     try {
       if (!navigator?.mediaDevices?.getUserMedia) {
@@ -99,10 +102,12 @@ export default function ARViewerPage() {
     setARViewerKey(prev => prev + 1);
     setDesktopViewerKey(prev => prev + 1);
   };
+  */
 
-  const shouldRenderDesktopViewer = deviceType === 'desktop';
-  const shouldRenderARViewer = deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'granted';
-  const shouldRenderMobileDesktopViewer = deviceType === 'mobile' && userChoice === 'desktop';
+  // AR 기능을 비활성화하고 모든 디바이스에서 Desktop 뷰어만 사용
+  const shouldRenderDesktopViewer = true; // 항상 Desktop 뷰어 사용
+  // const shouldRenderARViewer = deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'granted';
+  // const shouldRenderMobileDesktopViewer = deviceType === 'mobile' && userChoice === 'desktop';
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -144,20 +149,25 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🖥️ 데스크톱 3D 뷰어 */}
+      {/* 🖥️ 데스크톱 & 모바일 3D 뷰어 - 모든 디바이스에서 사용 */}
       {shouldRenderDesktopViewer && modelPath && artwork && (
-        <DesktopViewer 
-          key={`desktop-${desktopViewerKey}`}
-          modelPath={modelPath}
-          artwork={artwork}
-        />
+        <div className="w-full h-full relative">
+          <DesktopViewer 
+            key={`viewer-${desktopViewerKey}`}
+            modelPath={modelPath}
+            artwork={artwork}
+            autoRotate={deviceType === 'mobile'} // 모바일에서는 자동 회전 활성화
+          />
+        </div>
       )}
 
-      {/* 📱 모바일 선택 화면 */}
+      {/* AR 관련 UI들 - 모두 비활성화했지만 코드는 유지 */}
+      {/* 
+      // 📱 모바일 선택 화면
       {deviceType === 'mobile' && !userChoice && artwork && modelPath && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6 max-w-sm">
-            {/* 🔧 작품 정보 미리보기 (실제 데이터 사용) */}
+            // 🔧 작품 정보 미리보기 (실제 데이터 사용)
             <div className="bg-black/50 rounded-lg p-4 mb-6 text-left">
               <h2 className="font-bold text-xl mb-2">{artwork.title}</h2>
               <p className="text-sm opacity-90 mb-1">
@@ -204,7 +214,7 @@ export default function ARViewerPage() {
         </div>
       )}
       
-      {/* 카메라 권한 확인 중 */}
+      // 카메라 권한 확인 중
       {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'prompt' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6">
@@ -217,7 +227,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 카메라 권한 차단됨 */}
+      // 카메라 권한 차단됨
       {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'denied' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-red-900/80 z-20">
           <div className="text-center p-6 max-w-sm">
@@ -230,7 +240,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* AR 오류 팝업 */}
+      // AR 오류 팝업
       {showARErrorPopup && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
@@ -257,7 +267,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장 */}
+      // 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장
       {shouldRenderARViewer && modelPath && (
         <div className="w-full h-full">
           <ARViewer 
@@ -271,7 +281,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
+      // 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장
       {shouldRenderMobileDesktopViewer && modelPath && artwork && (
         <div className="w-full h-full relative">
           <button 
@@ -291,6 +301,7 @@ export default function ARViewerPage() {
           />
         </div>
       )}
+      */}
     </div>
   );
 }
