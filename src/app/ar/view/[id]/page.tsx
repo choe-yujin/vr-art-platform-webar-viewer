@@ -3,10 +3,18 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import DesktopViewer from '@/components/DesktopViewer';
 import ARViewer from '@/components/ARViewer';
+import { useArtwork } from '@/hooks/useArtwork';
 
 export default function ARViewerPage() {
+  const params = useParams();
+  const artworkId = params.id as string;
+  
+  // 🎨 백엔드 API에서 작품 정보 로드
+  const { artwork, loading: artworkLoading, error: artworkError, modelPath } = useArtwork(artworkId);
+  
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
   const [userChoice, setUserChoice] = useState<'ar' | 'desktop' | null>(null);
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null);
@@ -98,7 +106,36 @@ export default function ARViewerPage() {
 
   return (
     <div className="fixed inset-0 bg-black">
-      {!deviceType && (
+      {/* 🎨 작품 로딩 상태 */}
+      {artworkLoading && (
+        <div className="flex items-center justify-center h-full text-white">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <p className="text-lg font-medium">작품 정보 로딩 중...</p>
+            <p className="text-sm opacity-75 mt-2">ID: {artworkId}</p>
+          </div>
+        </div>
+      )}
+      
+      {/* 🎨 작품 로드 오류 */}
+      {artworkError && (
+        <div className="flex items-center justify-center h-full text-white">
+          <div className="text-center p-6 max-w-md">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-xl font-bold mb-2">작품을 찾을 수 없습니다</h2>
+            <p className="text-sm opacity-75 mb-4">{artworkError}</p>
+            <button 
+              onClick={() => window.history.back()} 
+              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
+            >
+              뒤로가기
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* 디바이스 감지 로딩 */}
+      {!artworkLoading && !artworkError && !deviceType && (
         <div className="flex items-center justify-center h-full text-white">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
@@ -107,18 +144,59 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {shouldRenderDesktopViewer && (
+      {/* 🖥️ 데스크톱 3D 뷰어 */}
+      {shouldRenderDesktopViewer && modelPath && artwork && (
         <div className="w-full h-full relative">
+          {/* 작품 정보 표시 */}
+          <div className="absolute top-4 left-4 bg-black/70 text-white p-4 rounded-lg z-10 max-w-sm">
+            <h3 className="font-bold text-xl mb-2">{artwork.title}</h3>
+            <div className="text-sm space-y-1">
+              <p className="opacity-90">
+                <span className="text-blue-300">작가:</span> {artwork.user.nickname}
+              </p>
+              {artwork.description && (
+                <p className="text-xs mt-3 opacity-70 leading-relaxed">
+                  {artwork.description}
+                </p>
+              )}
+              <div className="flex items-center gap-4 mt-3 text-xs opacity-60">
+                <span>👁️ {artwork.viewCount?.toLocaleString() || 0}</span>
+                <span>❤️ {artwork.favoriteCount?.toLocaleString() || 0}</span>
+              </div>
+            </div>
+          </div>
+          
           <DesktopViewer 
             key={`desktop-${desktopViewerKey}`}
-            modelPath="/sample.glb" 
+            modelPath={modelPath}
           />
         </div>
       )}
 
-      {deviceType === 'mobile' && !userChoice && (
+      {/* 📱 모바일 선택 화면 */}
+      {deviceType === 'mobile' && !userChoice && artwork && modelPath && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6 max-w-sm">
+            {/* 작품 정보 미리보기 */}
+            <div className="bg-black/50 rounded-lg p-4 mb-6 text-left">
+              <h2 className="font-bold text-xl mb-2">{artwork.title}</h2>
+              <p className="text-sm opacity-90 mb-1">
+                <span className="text-blue-300">작가:</span> {artwork.user.nickname}
+              </p>
+              {artwork.description && (
+                <p className="text-xs opacity-70 mt-2 leading-relaxed">
+                  {artwork.description.length > 100 
+                    ? `${artwork.description.substring(0, 100)}...`
+                    : artwork.description
+                  }
+                </p>
+              )}
+              <div className="flex items-center gap-4 mt-3 text-xs opacity-60">
+                <span>👁️ {artwork.viewCount?.toLocaleString() || 0}</span>
+                <span>❤️ {artwork.favoriteCount?.toLocaleString() || 0}</span>
+              </div>
+            </div>
+            
             <div className="text-6xl mb-4">📱✨</div>
             <p className="text-lg font-medium mb-2">어떻게 작품을 감상하시겠습니까?</p>
             <p className="text-sm opacity-75 mb-4">AR로 현실 공간에 배치하거나, 3D 뷰어로 감상할 수 있습니다</p>
@@ -140,6 +218,7 @@ export default function ARViewerPage() {
         </div>
       )}
       
+      {/* 카메라 권한 확인 중 */}
       {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'prompt' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6">
@@ -152,6 +231,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
+      {/* 카메라 권한 차단됨 */}
       {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'denied' && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-red-900/80 z-20">
           <div className="text-center p-6 max-w-sm">
@@ -164,6 +244,7 @@ export default function ARViewerPage() {
         </div>
       )}
 
+      {/* AR 오류 팝업 */}
       {showARErrorPopup && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
@@ -191,11 +272,11 @@ export default function ARViewerPage() {
       )}
 
       {/* 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장 */}
-      {shouldRenderARViewer && (
+      {shouldRenderARViewer && modelPath && (
         <div className="w-full h-full">
           <ARViewer 
             key={`ar-${arViewerKey}`}
-            modelPath="/sample.glb" 
+            modelPath={modelPath}
             deviceType="mobile" 
             onLoadError={handleARError} 
             onBackPressed={handleBackFromAR} 
@@ -205,8 +286,28 @@ export default function ARViewerPage() {
       )}
 
       {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
-      {shouldRenderMobileDesktopViewer && (
+      {shouldRenderMobileDesktopViewer && modelPath && artwork && (
         <div className="w-full h-full relative">
+          {/* 작품 정보 표시 */}
+          <div className="absolute top-16 left-4 bg-black/70 text-white p-3 rounded-lg z-10 max-w-sm">
+            <h3 className="font-bold text-lg mb-1">{artwork.title}</h3>
+            <p className="text-sm opacity-90">
+              <span className="text-blue-300">작가:</span> {artwork.user.nickname}
+            </p>
+            {artwork.description && (
+              <p className="text-xs mt-2 opacity-70 leading-relaxed">
+                {artwork.description.length > 80 
+                  ? `${artwork.description.substring(0, 80)}...`
+                  : artwork.description
+                }
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-2 text-xs opacity-60">
+              <span>👁️ {artwork.viewCount?.toLocaleString() || 0}</span>
+              <span>❤️ {artwork.favoriteCount?.toLocaleString() || 0}</span>
+            </div>
+          </div>
+          
           <button 
             onClick={handleBackFromAR} 
             className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors" 
@@ -218,7 +319,7 @@ export default function ARViewerPage() {
           </button>
           <DesktopViewer 
             key={`mobile-desktop-${desktopViewerKey}`}
-            modelPath="/sample.glb" 
+            modelPath={modelPath}
             autoRotate={true} 
           />
         </div>
