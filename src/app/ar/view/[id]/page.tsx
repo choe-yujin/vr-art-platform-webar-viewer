@@ -156,7 +156,7 @@ export default function ARViewerPage() {
             key={`viewer-${desktopViewerKey}`}
             modelPath={modelPath}
             artwork={artwork}
-            autoRotate={deviceType === 'mobile'} // 모바일에서는 자동 회전 활성화
+            autoRotate={true} // 모든 디바이스에서 자동 회전 활성화
           />
         </div>
       )}
