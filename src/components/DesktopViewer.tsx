@@ -322,20 +322,20 @@ export default function DesktopViewer({
       
       {/* 🔧 작품 정보 (왼쪽 하단으로 변경, 실제 데이터 사용) */}
       {status === 'active' && artwork && (
-        <div className="absolute bottom-6 left-6 bg-black/70 backdrop-blur-md text-white p-4 rounded-xl z-10 max-w-md">
+        <div className="absolute bottom-6 left-4 md:left-6 bg-black/70 backdrop-blur-md text-white p-3 md:p-4 rounded-xl z-10 max-w-xs md:max-w-md">
           <div className="text-left">
-            <h2 className="font-bold text-xl mb-2">{artwork.title}</h2>
+            <h2 className="font-bold text-lg md:text-xl mb-1 md:mb-2">{artwork.title}</h2>
             {artwork.description && (
-              <p className="text-sm opacity-75 mb-3 leading-relaxed">
+              <p className="text-xs md:text-sm opacity-75 mb-2 md:mb-3 leading-relaxed line-clamp-2">
                 {artwork.description}
               </p>
             )}
-            <div className="flex items-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4 md:gap-6 text-xs md:text-sm">
+              <div className="flex items-center gap-1 md:gap-2">
                 <span className="text-red-400">❤️</span>
                 <span>{artwork.favoriteCount?.toLocaleString() || 0}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2">
                 <span className="text-blue-400">👁️</span>
                 <span>{artwork.viewCount?.toLocaleString() || 0}</span>
               </div>
@@ -368,32 +368,35 @@ export default function DesktopViewer({
         </div>
       )}
       
-      {/* 🔧 플로팅 버튼들 (오른쪽 하단) */}
+      {/* 🔧 플로팅 버튼들 (오른쪽 하단) - 모바일에서 세로 배치, 데스크톱에서 세로 배치 */}
       {status === 'active' && (
-        <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-20">
-          <button 
-            onClick={() => setShowShareModal(true)}
-            className="bg-black/70 backdrop-blur-md text-white px-4 py-3 rounded-xl hover:bg-black/90 transition-all duration-200 shadow-lg"
-          >
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-              </svg>
-              <span>공유하기</span>
-            </div>
-          </button>
-          
-          <button 
-            onClick={() => setShowArtistInfo(true)}
-            className="bg-black/70 backdrop-blur-md text-white px-4 py-3 rounded-xl hover:bg-black/90 transition-all duration-200 shadow-lg"
-          >
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span>작가정보</span>
-            </div>
-          </button>
+        <div className="fixed bottom-6 right-4 md:right-6 z-20">
+          {/* 모바일: 두 버튼을 가로로 배치, 데스크톱: 세로로 배치 */}
+          <div className="flex flex-row md:flex-col gap-2 md:gap-3">
+            <button 
+              onClick={() => setShowShareModal(true)}
+              className="bg-black/70 backdrop-blur-md text-white px-3 py-2 md:px-4 md:py-3 rounded-lg md:rounded-xl hover:bg-black/90 transition-all duration-200 shadow-lg flex-1 md:flex-none"
+            >
+              <div className="flex items-center justify-center md:justify-start space-x-0 md:space-x-2">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                </svg>
+                <span className="hidden md:inline text-sm">공유하기</span>
+              </div>
+            </button>
+            
+            <button 
+              onClick={() => setShowArtistInfo(true)}
+              className="bg-black/70 backdrop-blur-md text-white px-3 py-2 md:px-4 md:py-3 rounded-lg md:rounded-xl hover:bg-black/90 transition-all duration-200 shadow-lg flex-1 md:flex-none"
+            >
+              <div className="flex items-center justify-center md:justify-start space-x-0 md:space-x-2">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span className="hidden md:inline text-sm">작가정보</span>
+              </div>
+            </button>
+          </div>
         </div>
       )}
       
