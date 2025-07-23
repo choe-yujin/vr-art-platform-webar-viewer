@@ -122,10 +122,9 @@ export default function DesktopViewer({
       
       camera.position.set(1, 1, 1);
       
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setClearColor(0x000000, 0); // 투명 배경 설정
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
@@ -221,14 +220,24 @@ export default function DesktopViewer({
 
   // 배경색 변경 효과
   useEffect(() => {
+    console.log('🌌 배경색 변경 useEffect 실행, backgroundDark:', backgroundDark);
     if (sceneRef.current) {
-      sceneRef.current.background = backgroundDark ? new THREE.Color(0x000000) : null;
+      const color = backgroundDark ? 0x000000 : 0xffffff; // 검은색 또는 흰색
+      console.log('🎭 Three.js 씬 배경 변경:', backgroundDark ? '검은색 (0x000000)' : '흰색 (0xffffff)');
+      sceneRef.current.background = new THREE.Color(color);
+    } else {
+      console.log('⚠️ sceneRef.current가 null입니다!');
     }
   }, [backgroundDark]);
 
   // 토글 함수
   const toggleBackground = () => {
-    setBackgroundDark(prev => !prev);
+    console.log('🎨 배경색 토글 버튼 클릭됨!');
+    console.log('현재 backgroundDark:', backgroundDark);
+    setBackgroundDark(prev => {
+      console.log('backgroundDark 변경:', prev, '->', !prev);
+      return !prev;
+    });
   };
 
   // 🔧 공유 링크 복사 함수
@@ -257,7 +266,7 @@ export default function DesktopViewer({
       <div 
         ref={containerRef}
         className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: backgroundDark ? '#000000' : 'transparent' }}
+        style={{ backgroundColor: backgroundDark ? '#000000' : '#ffffff' }}
       />
       
       {/* 🔧 프로모션 헤더 (상단) */}
@@ -339,9 +348,12 @@ export default function DesktopViewer({
       {status === 'active' && (
         <div className="fixed top-6 right-6 z-30">
           <button 
-            onClick={toggleBackground}
+            onClick={() => {
+              console.log('🔵 버튼 onClick 호출됨!');
+              toggleBackground();
+            }}
             className="bg-white/20 backdrop-blur-md text-white p-3 rounded-full hover:bg-white/30 transition-all duration-200 shadow-lg"
-            title={backgroundDark ? '투명 배경으로 변경' : '검은색 배경으로 변경'}
+            title={backgroundDark ? '흰색 배경으로 변경' : '검은색 배경으로 변경'}
           >
             {backgroundDark ? (
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
