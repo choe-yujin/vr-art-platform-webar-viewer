@@ -106,7 +106,7 @@ export default function DesktopViewer({
       container.innerHTML = '';
       
       const scene = new THREE.Scene();
-      scene.background = backgroundDark ? new THREE.Color(0x000000) : null;
+      scene.background = new THREE.Color(0x000000); // 기본은 검은색으로 고정
       sceneRef.current = scene;
       
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -166,7 +166,7 @@ export default function DesktopViewer({
         window.removeEventListener('resize', resizeHandler);
       }
     };
-  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError, backgroundDark]);
+  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError]);
 
   useEffect(() => {
     if (initializationRef.current) return;
