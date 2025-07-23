@@ -38,8 +38,16 @@ export default function DesktopViewer({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const onLoadCompleteRef = useRef(onLoadComplete);
+  const onLoadErrorRef = useRef(onLoadError);
   
   const renderIdRef = useRef(Math.random().toString(36).substr(2, 9));
+
+  // 콜백 함수들을 ref로 업데이트
+  useEffect(() => {
+    onLoadCompleteRef.current = onLoadComplete;
+    onLoadErrorRef.current = onLoadError;
+  }, [onLoadComplete, onLoadError]);
 
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
@@ -92,7 +100,7 @@ export default function DesktopViewer({
       setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
       throw error;
     }
-  }, [modelPath]);
+  }, [modelPath]); // modelPath만 의존
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
@@ -130,13 +138,13 @@ export default function DesktopViewer({
       loadModelForDesktop(scene, camera, controls)
         .then(() => {
           setStatus('active');
-          onLoadComplete?.();
+          if (onLoadCompleteRef.current) onLoadCompleteRef.current();
         })
         .catch((e: unknown) => { 
           setStatus('error'); 
           const errorMsg = e instanceof Error ? e.message : String(e);
           setErrorMessage(errorMsg);
-          onLoadError?.(errorMsg);
+          if (onLoadErrorRef.current) onLoadErrorRef.current(errorMsg);
         });
 
       const animate = () => {
@@ -158,7 +166,7 @@ export default function DesktopViewer({
       const errorMsg = error instanceof Error ? error.message : String(error);
       setErrorMessage(errorMsg);
       setStatus('error');
-      onLoadError?.(errorMsg);
+      if (onLoadErrorRef.current) onLoadErrorRef.current(errorMsg);
     }
     
     return () => {
@@ -166,7 +174,7 @@ export default function DesktopViewer({
         window.removeEventListener('resize', resizeHandler);
       }
     };
-  }, [autoRotate, rotationSpeed, loadModelForDesktop, onLoadComplete, onLoadError]);
+  }, [autoRotate, rotationSpeed, loadModelForDesktop]); // 최소한의 의존성만 유지
 
   useEffect(() => {
     if (initializationRef.current) return;
