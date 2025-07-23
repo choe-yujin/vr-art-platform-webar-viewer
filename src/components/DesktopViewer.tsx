@@ -257,7 +257,7 @@ export default function DesktopViewer({
       <div 
         ref={containerRef}
         className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: '#000000' }}
+        style={{ backgroundColor: backgroundDark ? '#000000' : 'transparent' }}
       />
       
       {/* 🔧 프로모션 헤더 (상단) */}
