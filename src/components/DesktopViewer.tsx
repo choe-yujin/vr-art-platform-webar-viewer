@@ -222,8 +222,8 @@ export default function DesktopViewer({
   useEffect(() => {
     console.log('🌌 배경색 변경 useEffect 실행, backgroundDark:', backgroundDark);
     if (sceneRef.current) {
-      const color = backgroundDark ? 0x000000 : 0xffffff; // 검은색 또는 흰색
-      console.log('🎭 Three.js 씬 배경 변경:', backgroundDark ? '검은색 (0x000000)' : '흰색 (0xffffff)');
+      const color = backgroundDark ? 0x000000 : 0xd3c7b8; // 검은색 또는 어두운 베이지 (dark beige)
+      console.log('🎭 Three.js 씬 배경 변경:', backgroundDark ? '검은색 (0x000000)' : '어두운 베이지 (0xd3c7b8)');
       sceneRef.current.background = new THREE.Color(color);
     } else {
       console.log('⚠️ sceneRef.current가 null입니다!');
@@ -266,7 +266,7 @@ export default function DesktopViewer({
       <div 
         ref={containerRef}
         className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: backgroundDark ? '#000000' : '#ffffff' }}
+        style={{ backgroundColor: backgroundDark ? '#000000' : '#d3c7b8' }}
       />
       
       {/* 🔧 프로모션 헤더 (상단) */}
@@ -353,7 +353,7 @@ export default function DesktopViewer({
               toggleBackground();
             }}
             className="bg-white/20 backdrop-blur-md text-white p-3 rounded-full hover:bg-white/30 transition-all duration-200 shadow-lg"
-            title={backgroundDark ? '흰색 배경으로 변경' : '검은색 배경으로 변경'}
+            title={backgroundDark ? '밝은 배경으로 변경' : '검은색 배경으로 변경'}
           >
             {backgroundDark ? (
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -373,7 +373,7 @@ export default function DesktopViewer({
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-20">
           <button 
             onClick={() => setShowShareModal(true)}
-            className="bg-white/20 backdrop-blur-md text-white px-4 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 shadow-lg"
+            className="bg-black/70 backdrop-blur-md text-white px-4 py-3 rounded-xl hover:bg-black/90 transition-all duration-200 shadow-lg"
           >
             <div className="flex items-center space-x-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,7 +385,7 @@ export default function DesktopViewer({
           
           <button 
             onClick={() => setShowArtistInfo(true)}
-            className="bg-white/20 backdrop-blur-md text-white px-4 py-3 rounded-xl hover:bg-white/30 transition-all duration-200 shadow-lg"
+            className="bg-black/70 backdrop-blur-md text-white px-4 py-3 rounded-xl hover:bg-black/90 transition-all duration-200 shadow-lg"
           >
             <div className="flex items-center space-x-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
