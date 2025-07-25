@@ -23,6 +23,7 @@ export interface ArtworkResponse {
     userId: number;
     nickname: string;
     profileImageUrl?: string;
+    bio?: string;
   };
   // 호환성을 위한 tags 배열
   tags?: Array<{
@@ -103,11 +104,12 @@ export async function fetchArtwork(artworkId: string, token?: string): Promise<A
     // 백엔드 응답을 프론트엔드 호환 형식으로 변환
     const compatibleArtwork: ArtworkResponse = {
       ...artwork,
-      // user 객체 생성 (백엔드에서 userNickname을 사용)
+      // user 객체 생성 - 실제 백엔드에서 제공된 작가 정보 사용
       user: {
-        userId: artwork.userId,
-        nickname: artwork.userNickname,
-        profileImageUrl: undefined // 백엔드에서 아직 지원하지 않음
+        userId: artwork.user?.userId || artwork.userId,
+        nickname: artwork.user?.nickname || artwork.userNickname,
+        profileImageUrl: artwork.user?.profileImageUrl, // 실제 S3 이미지 URL
+        bio: artwork.user?.bio // 실제 작가 소개
       },
       // tags 배열 초기화 (백엔드에서 아직 지원하지 않음)
       tags: artwork.tags || []

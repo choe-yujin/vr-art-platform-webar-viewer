@@ -405,22 +405,53 @@ export default function DesktopViewer({
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <div className="text-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <span className="text-white text-2xl font-bold">
-                  {artwork.user.nickname.charAt(0).toUpperCase()}
-                </span>
+              {/* 🎯 프로필 이미지: 실제 S3 이미지 로딩 및 폴백 처리 */}
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                {artwork.user.profileImageUrl ? (
+                  <img 
+                    src={artwork.user.profileImageUrl} 
+                    alt={`${artwork.user.nickname}의 프로필`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // 🎯 S3 이미지 로드 실패 시 기본 아바타로 폴백
+                      console.log('프로필 이미지 로드 실패, 기본 아바타로 폴백:', artwork.user.profileImageUrl);
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent) {
+                        const fallbackElement = parent.querySelector('.fallback-avatar') as HTMLElement;
+                        if (fallbackElement) {
+                          fallbackElement.style.display = 'flex';
+                        }
+                      }
+                    }}
+                    onLoad={() => {
+                      console.log('프로필 이미지 로드 성공:', artwork.user.profileImageUrl);
+                    }}
+                  />
+                ) : null}
+                <div className={`fallback-avatar absolute inset-0 w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center ${
+                  artwork.user.profileImageUrl ? 'hidden' : 'flex'
+                }`}>
+                  <span className="text-white text-2xl font-bold">
+                    {artwork.user.nickname.charAt(0).toUpperCase()}
+                  </span>
+                </div>
               </div>
+              
               <h3 className="text-xl font-bold text-gray-800 mb-2">{artwork.user.nickname}</h3>
               <p className="text-gray-600 mb-4">VR 3D 아티스트</p>
               
               <div className="bg-gray-50 rounded-lg p-3 mb-4 text-left">
                 <h4 className="font-semibold text-gray-800 mb-2">작가 소개</h4>
-                <p className="text-sm text-gray-600">
-                  {artwork.user.nickname === 'test_artist' 
-                    ? 'VR 공간에서 창작하는 3D 아티스트입니다. 새로운 차원의 예술을 탐구하며, VR과 AR을 통해 관람객들과 소통합니다.'
-                    : `${artwork.user.nickname}님은 VR 3D 아티스트로 활동하고 있습니다.`
-                  }
-                </p>
+                <div className="text-sm text-gray-600">
+                  {/* 🎯 실제 작가 bio 데이터 사용 */}
+                  {artwork.user.bio ? (
+                    <p className="leading-relaxed">{artwork.user.bio}</p>
+                  ) : (
+                    <p className="text-gray-400 italic">소개글이 없습니다.</p>
+                  )}
+                </div>
               </div>
               
               <div className="space-y-3">
