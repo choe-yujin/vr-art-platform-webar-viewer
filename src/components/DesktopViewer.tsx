@@ -52,9 +52,13 @@ export default function DesktopViewer({
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
       const loader = new GLTFLoader();
-      let threeIcosaLoaded = false;
       
-      // Three-Icosa 확장자 등록
+      // 😫 Three-Icosa 완전 비활성화 (임시 테스트)
+      const threeIcosaLoaded = false;
+      console.log('🔧 [1단계 테스트] Three-Icosa 비활성화 - 기본 GLB 로더만 사용');
+      
+      /* 
+      // Three-Icosa 확장자 등록 주석처리
       try {
         const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
         const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
@@ -65,6 +69,7 @@ export default function DesktopViewer({
         console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
         threeIcosaLoaded = false;
       }
+      */
 
       const gltf = await loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
@@ -95,6 +100,7 @@ export default function DesktopViewer({
       });
       
       console.log(`📊 총 ${meshes.length}개의 Mesh 발견`);
+      console.log('📋 [1단계 테스트] 기본 GLB 로더로 모델 로딩 완료 - Three-Icosa 없이 로드됨');
       
       // 🔧 강화된 조명 시스템 추가 (항상 추가)
       // 기존 조명 제거
