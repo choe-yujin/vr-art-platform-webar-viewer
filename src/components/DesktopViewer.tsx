@@ -52,13 +52,9 @@ export default function DesktopViewer({
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
       const loader = new GLTFLoader();
+      let threeIcosaLoaded = false;
       
-      // 😫 Three-Icosa 완전 비활성화 (임시 테스트)
-      const threeIcosaLoaded = false;
-      console.log('🔧 [1단계 테스트] Three-Icosa 비활성화 - 기본 GLB 로더만 사용');
-      
-      /* 
-      // Three-Icosa 확장자 등록 주석처리
+      // 🔧 Three-Icosa 확장자 등록 (개선된 에러 처리)
       try {
         const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
         const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
@@ -67,9 +63,9 @@ export default function DesktopViewer({
         console.log('✅ Three-Icosa 확장자 등록 성공');
       } catch (icosaError) {
         console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
+        console.warn('📋 기본 GLB 로더만 사용합니다.');
         threeIcosaLoaded = false;
       }
-      */
 
       const gltf = await loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
@@ -100,7 +96,7 @@ export default function DesktopViewer({
       });
       
       console.log(`📊 총 ${meshes.length}개의 Mesh 발견`);
-      console.log('📋 [1단계 테스트] 기본 GLB 로더로 모델 로딩 완료 - Three-Icosa 없이 로드됨');
+      console.log(`🌨️ Three-Icosa 사용: ${threeIcosaLoaded ? 'YES' : 'NO'} - ${threeIcosaLoaded ? '브러시 머티리얼 사용' : '기본 GLB 로더 사용'}`);
       
       // 🔧 강화된 조명 시스템 추가 (항상 추가)
       // 기존 조명 제거
@@ -127,6 +123,30 @@ export default function DesktopViewer({
       
       // 🔧 모델을 씬에 추가
       scene.add(gltf.scene);
+      
+      // 🎯 BubbleWand 브러시 특별 처리 (투명도 문제 해결)
+      let bubbleWandFixed = 0;
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.name.includes('BubbleWand')) {
+          // BubbleWand 브러시의 투명도 문제 감지 및 수정
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material, index) => {
+              // 투명도가 너무 낮은 경우 수정
+              if (material.opacity < 0.1 || (material.transparent && material.opacity < 0.3)) {
+                material.opacity = Math.max(material.opacity, 0.7); // 최소 70% 리베도
+                material.transparent = material.opacity < 1.0;
+                bubbleWandFixed++;
+                console.log(`🪷 BubbleWand 투명도 수정: ${child.name}[${index}] opacity: ${material.opacity}`);
+              }
+            });
+          }
+        }
+      });
+      
+      if (bubbleWandFixed > 0) {
+        console.log(`✨ BubbleWand 브러시 ${bubbleWandFixed}개 투명도 문제 수정 완료`);
+      }
       
       // 🔧 향상된 바운딩 박스 계산
       let box = new THREE.Box3().setFromObject(gltf.scene);
