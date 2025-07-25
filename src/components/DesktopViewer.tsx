@@ -54,11 +54,10 @@ export default function DesktopViewer({
       const loader = new GLTFLoader();
       let threeIcosaLoaded = false;
       
-      // 별도의 상태 처리 없이 매번 새로 등록
+      // Three-Icosa 확장자 등록
       try {
         const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
         const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
-        // 매번 새로운 로더에 확장자 등록
         loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
         threeIcosaLoaded = true;
         console.log('✅ Three-Icosa 확장자 등록 성공');
@@ -74,33 +73,148 @@ export default function DesktopViewer({
         }
       });
       
+      // 🔧 모델 구조 상세 분석
+      console.log('🎯 GLB 모델 분석 시작');
+      console.log('📦 GLTF Scene:', gltf.scene);
+      console.log('👥 Children 수:', gltf.scene.children.length);
+      
+      // 모든 Mesh 요소 찾기 및 분석
+      const meshes: THREE.Mesh[] = [];
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          meshes.push(child);
+          console.log('🔍 Mesh 발견:', {
+            name: child.name,
+            position: child.position,
+            scale: child.scale,
+            visible: child.visible,
+            geometryType: child.geometry.type,
+            materialType: child.material ? (Array.isArray(child.material) ? child.material.map(m => m.type) : child.material.type) : 'none'
+          });
+        }
+      });
+      
+      console.log(`📊 총 ${meshes.length}개의 Mesh 발견`);
+      
+      // 🔧 강화된 조명 시스템 추가 (항상 추가)
+      // 기존 조명 제거
+      const existingLights = scene.children.filter(child => 
+        child instanceof THREE.Light || 
+        child instanceof THREE.AmbientLight || 
+        child instanceof THREE.DirectionalLight
+      );
+      existingLights.forEach(light => scene.remove(light));
+      
+      // 새로운 조명 시스템
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // 주변광
+      scene.add(ambientLight);
+      
+      const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight1.position.set(10, 10, 5);
+      scene.add(directionalLight1);
+      
+      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      directionalLight2.position.set(-10, -10, -5);
+      scene.add(directionalLight2);
+      
+      console.log('💡 강화된 조명 시스템 추가됨');
+      
+      // 🔧 모델을 씬에 추가
       scene.add(gltf.scene);
       
-      const box = new THREE.Box3().setFromObject(gltf.scene);
+      // 🔧 향상된 바운딩 박스 계산
+      let box = new THREE.Box3().setFromObject(gltf.scene);
+      
+      // 바운딩 박스가 유효하지 않은 경우 개별 Mesh로 계산
+      if (box.isEmpty() || !isFinite(box.min.x) || !isFinite(box.min.y) || !isFinite(box.min.z) || 
+          !isFinite(box.max.x) || !isFinite(box.max.y) || !isFinite(box.max.z)) {
+        console.warn('⚠️ 전체 바운딩 박스 계산 실패, 개별 Mesh로 재계산');
+        box = new THREE.Box3();
+        meshes.forEach(mesh => {
+          const meshBox = new THREE.Box3().setFromObject(mesh);
+          if (!meshBox.isEmpty()) {
+            box.union(meshBox);
+          }
+        });
+      }
+      
+      // 여전히 비어있다면 기본값 사용
+      if (box.isEmpty()) {
+        console.warn('⚠️ 모든 바운딩 박스 계산 실패, 기본값 사용');
+        box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 2, 2));
+      }
+      
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
+      
+      console.log('📊 최종 바운딩 정보:', {
+        center: center,
+        size: size,
+        isEmpty: box.isEmpty()
+      });
+      
+      // 🔧 카메라 설정 최적화 - 온라인 GLTF 뷰어 방식
       controls.target.copy(center);
       
       const maxDimension = Math.max(size.x, size.y, size.z);
-      const distance = maxDimension * 0.7;
-      const originalDistance = Math.sqrt(3);
-      const scale = distance / originalDistance;
       
+      // 🎯 온라인 뷰어 방식의 카메라 거리 계산
+      const fov = camera.fov * Math.PI / 180; // FOV를 라디안으로 변환
+      const distance = maxDimension / (2 * Math.tan(fov / 2)) * 1.8; // 1.8은 여유공간
+      
+      console.log(`📷 온라인 뷰어 방식 카메라 설정: maxDim=${maxDimension}, distance=${distance}, fov=${camera.fov}°`);
+      
+      // 카메라를 모델 앞쪽 대각선에 배치 (온라인 뷰어 기본 위치)
       camera.position.set(
-        center.x + scale,
-        center.y + scale, 
-        center.z + scale
+        center.x + distance * 0.7,  // x축으로 약간 옆에서
+        center.y + distance * 0.5,  // y축으로 약간 위에서
+        center.z + distance * 0.7   // z축으로 앞쪽에서
       );
+      
       camera.lookAt(center);
+      
+      // 🔧 카메라 near/far 최적화 (온라인 뷰어 방식)
+      camera.near = Math.max(0.01, distance / 100);
+      camera.far = distance * 100;
+      camera.updateProjectionMatrix();
+      
+      // 🔧 OrbitControls 설정 최적화
+      controls.minDistance = distance * 0.1;
+      controls.maxDistance = distance * 10;
       controls.update();
-      setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(Tilt Brush)' : ''}`);
+      
+      console.log('✅ 카메라 및 컨트롤 설정 완료');
+      
+      // 🔧 디버깅: 모델 가시성 강제 확인
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.visible = true;
+          child.frustumCulled = false; // 프러스텀 컬링 비활성화
+          
+          // 머티리얼 확인 및 수정
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach(material => {
+              if (material instanceof THREE.MeshStandardMaterial || 
+                  material instanceof THREE.MeshBasicMaterial) {
+                material.transparent = material.transparent || false;
+                material.opacity = Math.max(material.opacity || 1, 0.1);
+                material.visible = true;
+              }
+            });
+          }
+        }
+      });
+      
+      setDebugInfo(`모델 로딩 완료! Meshes: ${meshes.length}, ${threeIcosaLoaded ? '(Tilt Brush)' : ''}`);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ 모델 로딩 상세 오류:', error);
       setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
       throw error;
     }
-  }, [modelPath]); // modelPath만 의존
+  }, [modelPath]);
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
@@ -408,6 +522,7 @@ export default function DesktopViewer({
               {/* 🎯 프로필 이미지: 실제 S3 이미지 로딩 및 폴백 처리 */}
               <div className="w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
                 {artwork.user.profileImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img 
                     src={artwork.user.profileImageUrl} 
                     alt={`${artwork.user.nickname}의 프로필`}
