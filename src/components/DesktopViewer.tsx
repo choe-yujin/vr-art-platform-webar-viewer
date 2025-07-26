@@ -51,7 +51,7 @@ export default function DesktopViewer({
   // 🔥 기본 GLTF 뷰어로 fallback 하는 함수
   const loadBasicGLTF = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     console.log('🔄 기본 GLTF 뷰어로 fallback 시도...');
-    setDebugInfo('기본 GLTF 뷰어로 다시 로딩 중...');
+    setDebugInfo('호환성 문제 감지됨, 기본 모드로 전환 중...');
     
     const basicLoader = new GLTFLoader();
     const gltf = await basicLoader.loadAsync(modelPath);
@@ -90,7 +90,7 @@ export default function DesktopViewer({
       }
     });
     
-    setDebugInfo('기본 GLTF 뷰어로 로딩 완료!');
+    setDebugInfo('기본 모드로 로딩 완료! (호환성 모드)');
     console.log('✅ 기본 GLTF 뷰어로 성공적으로 로드됨');
   }, [modelPath]);
 
@@ -171,6 +171,7 @@ export default function DesktopViewer({
         
         // Three-icosa 로드 실패 시 바로 기본 뷰어로 fallback
         console.log('🔄 Three-icosa 로드 실패로 인한 기본 뷰어 fallback');
+        setDebugInfo('VR 브러시 로드 실패, 기본 모드로 전환 중...');
         await loadBasicGLTF(scene, camera, controls);
         return;
       }
@@ -241,6 +242,7 @@ export default function DesktopViewer({
         fallbackExecuted = true;
         
         console.warn('🚨 Three-icosa 렌더링 실패 감지. 기본 GLTF 뷰어로 fallback...');
+        setDebugInfo('렌더링 문제 감지됨, 기본 모드로 전환 중...');
         
         // 기존 씬 클리어
         while(scene.children.length > 0) {
@@ -280,6 +282,7 @@ export default function DesktopViewer({
       if (!fallbackExecuted) {
         try {
           console.log('🔄 에러 발생으로 인한 기본 뷰어 fallback 시도...');
+          setDebugInfo('오류가 발생했습니다. 기본 모드로 복구 중...');
           
           // 기존 씬 클리어
           while(scene.children.length > 0) {
