@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -27,7 +26,6 @@ export default function DesktopViewer({
   const [status, setStatus] = useState<'loading' | 'active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('3D 뷰어 초기화 중...');
-  const [renderMode, setRenderMode] = useState<'three-icosa' | 'basic-gltf'>('three-icosa');
   
   const [showPromoHeader, setShowPromoHeader] = useState<boolean>(true);
   const [showArtistInfo, setShowArtistInfo] = useState<boolean>(false);
@@ -50,171 +48,36 @@ export default function DesktopViewer({
     onLoadErrorRef.current = onLoadError;
   }, [onLoadComplete, onLoadError]);
 
-  // 🎯 실제 렌더링 여부 검증 (화면에 보이는지 확인)
-  const validateActualRendering = (gltfScene: THREE.Object3D, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): boolean => {
-    try {
-      // 렌더링 전후 픽셀 체크
-      const canvas = renderer.domElement;
-      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-      
-      if (!gl) return false;
-      
-      // 한 프레임 렌더링
-      renderer.render(scene, camera);
-      
-      // 중앙 픽셀 샘플링 (검은 배경이 아닌지 확인)
-      const pixels = new Uint8Array(4);
-      const centerX = Math.floor(canvas.width / 2);
-      const centerY = Math.floor(canvas.height / 2);
-      
-      gl.readPixels(centerX, centerY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      
-      // RGB 값이 모두 0이 아니면 뭔가 렌더링됨
-      const hasContent = pixels[0] > 0 || pixels[1] > 0 || pixels[2] > 0;
-      
-      console.log(`🔍 실제 렌더링 검증: 중앙 픽셀 RGB(${pixels[0]}, ${pixels[1]}, ${pixels[2]}) = ${hasContent ? '렌더링됨' : '검은화면'}`);
-      
-      return hasContent;
-      
-    } catch (error) {
-      console.warn('⚠️ 렌더링 검증 실패:', error);
-      return false;
-    }
-  };
-
-  const tryThreeIcosaBrushes = useCallback(async (gltfScene: THREE.Object3D, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<boolean> => {
-    try {
-      const { processAllBrushes, setupTextureErrorHandling } = await import('../utils/threeicosa');
-      
-      console.log('🎨 Three-Icosa 브러시 처리 시도...');
-      
-      // 텍스처 에러 핸들링 설정 (S3 403 에러 대응)
-      setupTextureErrorHandling();
-      
-      // 브러시 처리 시도
-      const result = await processAllBrushes(gltfScene);
-      
-      if (!result.success) {
-        console.warn('⚠️ Three-Icosa 브러시 처리 실패');
-        return false;
-      }
-      
-      console.log(`🎨 Three-Icosa 처리 완료: ${result.processed}개 처리됨`);
-      
-      // 2초 후 실제 렌더링 여부 검증
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          const isActuallyRendered = validateActualRendering(gltfScene, renderer, scene, camera);
-          console.log(`🎨 Three-Icosa 처리 결과: ${isActuallyRendered ? '화면에 보임' : '화면에 안 보임'}`);
-          resolve(isActuallyRendered);
-        }, 2000);
-      });
-      
-    } catch (error) {
-      console.warn('⚠️ Three-Icosa 처리 실패:', error);
-      return false;
-    }
-  }, []);
-
-  // 🔧 순수 GLB로 다시 로딩 (Three-Icosa 완전 제거)
-  const fallbackToPureGLTF = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
-    console.log('🔧 순수 GLB 렌더링으로 재시도...');
-    
-    // 기존 씬 정리
-    scene.clear();
-    
-    // 조명 다시 추가
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight1.position.set(10, 10, 5);
-    scene.add(directionalLight1);
-    
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-    directionalLight2.position.set(-10, -10, -5);
-    scene.add(directionalLight2);
-    
-    // Three-Icosa 없이 순수 GLTFLoader로 다시 로딩
-    const loader = new GLTFLoader();
-    
-    try {
-      const gltf = await loader.loadAsync(modelPath);
-      console.log('📦 순수 GLB 로딩 완료');
-      
-      // Three-Icosa 처리 없이 바로 씬에 추가
-      scene.add(gltf.scene);
-      
-      // 모든 메시 활성화
-      gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.visible = true;
-          child.frustumCulled = false;
-        }
-      });
-      
-      // 카메라 재설정
-      const boundingBox = new THREE.Box3().setFromObject(gltf.scene);
-      const box = boundingBox.isEmpty() 
-        ? new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 2, 2))
-        : boundingBox;
-      
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      
-      controls.target.copy(center);
-      const maxDimension = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * Math.PI / 180;
-      const distance = maxDimension / (2 * Math.tan(fov / 2)) * 1.8;
-      
-      camera.position.set(
-        center.x + distance * 0.7,
-        center.y + distance * 0.5,
-        center.z + distance * 0.7
-      );
-      
-      camera.lookAt(center);
-      camera.updateProjectionMatrix();
-      controls.update();
-      
-      setRenderMode('basic-gltf');
-      setDebugInfo('순수 GLB 렌더링 성공');
-      
-      console.log('✅ 순수 GLB 렌더링 완료');
-      
-    } catch (error) {
-      console.error('❌ 순수 GLB 로딩도 실패:', error);
-      throw error;
-    }
-  }, [modelPath]);
-
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
-      // 🔥 근본 해결: Three-Icosa 익스텐션이 등록된 GLTFLoader를 먼저 얻어오기
-      const { processAllBrushes } = await import('../utils/threeicosa');
-      const dummyObject = new THREE.Object3D();
-      const brushResult = await processAllBrushes(dummyObject);
+      const loader = new GLTFLoader();
+      let threeIcosaLoaded = false;
       
-      let loader: GLTFLoader;
-      
-      if (brushResult.success && brushResult.gltfLoader) {
-        // Three-Icosa 익스텐션이 등록된 GLTFLoader 사용
-        loader = brushResult.gltfLoader;
-        console.log('✅ Three-Icosa 익스텐션이 등록된 GLTFLoader 사용');
-        setRenderMode('three-icosa');
-      } else {
-        // 기본 GLTFLoader 사용
-        loader = new GLTFLoader();
-        console.log('⚠️ Three-Icosa 실패, 기본 GLTFLoader 사용');
-        setRenderMode('basic-gltf');
+      // 🔥 안정적인 three-icosa 처리: CORS 에러 시 자동으로 기본 모드로 fallback
+      try {
+        const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
+        const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+        loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
+        threeIcosaLoaded = true;
+        console.log('✅ Three-Icosa 확장자 등록 성공');
+      } catch (icosaError) {
+        console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
+        threeIcosaLoaded = false;
       }
-      
-      const gltf = await loader.loadAsync(modelPath, (progress) => {
+
+      // 🔥 타임아웃 설정: 10초 이내에 로딩 완료되지 않으면 에러 처리
+      const loadPromise = loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
           const percent = Math.min(Math.round((progress.loaded / progress.total) * 100), 99);
           setDebugInfo(`모델 로딩... ${percent}%`);
         }
       });
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('모델 로딩 타임아웃 (10초 초과)')), 10000);
+      });
+
+      const gltf = await Promise.race([loadPromise, timeoutPromise]) as { scene: THREE.Group };
       
       console.log('🎯 GLB 모델 로드 완료');
       
@@ -230,67 +93,36 @@ export default function DesktopViewer({
       directionalLight2.position.set(-10, -10, -5);
       scene.add(directionalLight2);
       
-      console.log('💡 조명 시스템 추가됨');
-      
-      // 모델을 씬에 추가
       scene.add(gltf.scene);
       
-      if (brushResult.success) {
-        console.log(`🎨 Three-Icosa 브러시 처리 완료: ${brushResult.processed}개 처리됨`);
-        setDebugInfo('Three-Icosa 브러시 렌더링 성공');
-      } else {
-        setDebugInfo('기본 GLTF 렌더링 모드');
-      }
-      
       // 바운딩 박스 계산 및 카메라 설정
-      const boundingBox = new THREE.Box3().setFromObject(gltf.scene);
-      
-      const box = boundingBox.isEmpty() 
-        ? (() => {
-            console.warn('⚠️ 바운딩 박스 계산 실패, 기본값 사용');
-            return new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 2, 2));
-          })()
-        : boundingBox;
-      
+      const box = new THREE.Box3().setFromObject(gltf.scene);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      
-      console.log('📊 바운딩 정보:', { center, size });
-      
-      // 카메라 설정
       controls.target.copy(center);
+      
       const maxDimension = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * Math.PI / 180;
-      const distance = maxDimension / (2 * Math.tan(fov / 2)) * 1.8;
+      const distance = maxDimension * 0.7;
+      const originalDistance = Math.sqrt(3);
+      const scale = distance / originalDistance;
       
       camera.position.set(
-        center.x + distance * 0.7,
-        center.y + distance * 0.5,
-        center.z + distance * 0.7
+        center.x + scale,
+        center.y + scale, 
+        center.z + scale
       );
-      
       camera.lookAt(center);
-      camera.near = Math.max(0.01, distance / 100);
-      camera.far = distance * 100;
-      camera.updateProjectionMatrix();
-      
-      controls.minDistance = distance * 0.1;
-      controls.maxDistance = distance * 10;
       controls.update();
       
-      console.log('✅ 카메라 및 컨트롤 설정 완료');
-      
-      // 모델 가시성 설정
-      let visibleMeshCount = 0;
+      // 모든 메시 활성화
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.visible = true;
           child.frustumCulled = false;
-          visibleMeshCount++;
         }
       });
       
-      console.log(`👁️ 총 ${visibleMeshCount}개 메시 활성화`);
+      setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(VR 브러시 지원)' : '(기본 모드)'}`);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -298,7 +130,7 @@ export default function DesktopViewer({
       setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
       throw error;
     }
-  }, [modelPath, fallbackToPureGLTF, tryThreeIcosaBrushes]);
+  }, [modelPath]);
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
@@ -455,13 +287,6 @@ export default function DesktopViewer({
         className="absolute inset-0 w-full h-full"
         style={{ backgroundColor: backgroundDark ? '#000000' : '#d3c7b8' }}
       />
-      
-      {/* 렌더 모드 표시 */}
-      {status === 'active' && (
-        <div className="fixed top-20 left-6 bg-black/70 backdrop-blur-md text-white px-3 py-2 rounded-lg z-10 text-sm">
-          {renderMode === 'three-icosa' ? '🎨 VR 브러시 렌더링' : '📦 기본 GLTF 렌더링'}
-        </div>
-      )}
       
       {/* 프로모션 헤더 */}
       {showPromoHeader && (
