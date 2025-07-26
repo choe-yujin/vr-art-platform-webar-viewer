@@ -187,7 +187,74 @@ export default function DesktopViewer({
     return isTransparent ? 'transparent' : 'basic';
   }, []);
 
-  // 🔥 렌더링 검증 함수 (실제 렌더링 가능 여부 정밀 검사)
+  // 🔥 실제 화면 렌더링 결과 검증 함수 (픽셀 기반 검사)
+  const verifyActualRendering = useCallback((renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): boolean => {
+    try {
+      // 임시 렌더 타겟 생성 (512x512 해상도)
+      const testSize = 512;
+      const renderTarget = new THREE.WebGLRenderTarget(testSize, testSize);
+      
+      // 현재 렌더러 상태 저장
+      const originalRenderTarget = renderer.getRenderTarget();
+      
+      // 테스트 렌더링
+      renderer.setRenderTarget(renderTarget);
+      renderer.render(scene, camera);
+      
+      // 색상 데이터 읽기
+      const pixelBuffer = new Uint8Array(testSize * testSize * 4);
+      renderer.readRenderTargetPixels(renderTarget, 0, 0, testSize, testSize, pixelBuffer);
+      
+      // 색상 데이터 분석
+      let nonBlackPixels = 0;
+      let nonTransparentPixels = 0;
+      let totalBrightness = 0;
+      
+      for (let i = 0; i < pixelBuffer.length; i += 4) {
+        const r = pixelBuffer[i];
+        const g = pixelBuffer[i + 1];
+        const b = pixelBuffer[i + 2];
+        const a = pixelBuffer[i + 3];
+        
+        // 비배경색 (0,0,0) 또는 투명(a=0)이 아닌 픽셀 카운트
+        if (r > 10 || g > 10 || b > 10) {
+          nonBlackPixels++;
+          totalBrightness += (r + g + b);
+        }
+        
+        if (a > 10) {
+          nonTransparentPixels++;
+        }
+      }
+      
+      const totalPixels = testSize * testSize;
+      const nonBlackPercentage = (nonBlackPixels / totalPixels) * 100;
+      const nonTransparentPercentage = (nonTransparentPixels / totalPixels) * 100;
+      const avgBrightness = nonBlackPixels > 0 ? totalBrightness / (nonBlackPixels * 3) : 0;
+      
+      console.log(`🖼️ 픽셀 기반 렌더링 검증 결과:`);
+      console.log(`  - 비배경색 픽셀: ${nonBlackPixels}개 (${nonBlackPercentage.toFixed(2)}%)`);
+      console.log(`  - 비투명 픽셀: ${nonTransparentPixels}개 (${nonTransparentPercentage.toFixed(2)}%)`);
+      console.log(`  - 평균 밝기: ${avgBrightness.toFixed(1)}/255`);
+      
+      // 원래 렌더 타겟 복원
+      renderer.setRenderTarget(originalRenderTarget);
+      renderTarget.dispose();
+      
+      // 판정 기준: 비배경색 픽셀이 0.5% 이상이고 평균 밝기가 20 이상
+      const isActuallyRendered = nonBlackPercentage > 0.5 && avgBrightness > 20;
+      
+      console.log(`  - 최종 판정: ${isActuallyRendered ? '실제 렌더링 성공' : '검은 화면 또는 빈 렌더링'}`);
+      
+      return isActuallyRendered;
+      
+    } catch (error) {
+      console.error('❌ 픽셀 기반 렌더링 검증 실패:', error);
+      return false; // 오류 발생 시 실패로 처리
+    }
+  }, []);
+
+  // 🔥 기존 렌더링 검증 함수 (보조용)
   const verifyModelRendered = useCallback((scene: THREE.Scene): boolean => {
     let renderableMeshCount = 0;
     let totalMeshCount = 0;
@@ -359,13 +426,23 @@ export default function DesktopViewer({
         }
       });
       
-      // 🔥 다단계 렌더링 검증 - 빠른 및 늦은 검증 병행
-      // 1차 검증: 1초 후 (빠른 감지)
+      // 🔥 다단계 렌더링 검증 - 픽셀 기반 실제 렌더링 검사
+      // 1차 검증: 2초 후 (빠른 감지)
       setTimeout(async () => {
-        const isModelVisible1 = verifyModelRendered(scene);
+        console.log('🔍 1차 렌더링 검증 시작...');
+        
+        // 기존 메시 검증
+        const meshCheck = verifyModelRendered(scene);
+        console.log(`📊 메시 검증 결과: ${meshCheck}`);
+        
+        // 실제 픽셀 렌더링 검증
+        const pixelCheck = verifyActualRendering(rendererRef.current!, scene, camera);
+        console.log(`🖼️ 픽셀 검증 결과: ${pixelCheck}`);
+        
+        const isModelVisible1 = meshCheck && pixelCheck;
         
         if (!isModelVisible1) {
-          console.warn('🚨 1초 후 검증: Three-icosa로 로드했지만 모델이 렌더링되지 않음. 빠른 fallback...');
+          console.warn('🚨 1차 검증 실패: Three-icosa로 로드했지만 실제 렌더링되지 않음. 빠른 fallback...');
           
           // 기존 씬 클리어
           while(scene.children.length > 0) {
@@ -391,16 +468,26 @@ export default function DesktopViewer({
             }
           }
         } else {
-          console.log('✅ 1차 검증 통과: 모델이 정상 렌더링 중');
+          console.log('✅ 1차 검증 통과: 모델이 실제로 정상 렌더링 중');
         }
-      }, 1000);
+      }, 2000);
       
-      // 2차 검증: 4초 후 (최종 확인)
+      // 2차 검증: 5초 후 (최종 확인)
       setTimeout(async () => {
-        const isModelVisible2 = verifyModelRendered(scene);
+        console.log('🔍 2차 렌더링 검증 시작...');
+        
+        // 기존 메시 검증
+        const meshCheck2 = verifyModelRendered(scene);
+        console.log(`📊 메시 검증 결과: ${meshCheck2}`);
+        
+        // 실제 픽셀 렌더링 검증
+        const pixelCheck2 = verifyActualRendering(rendererRef.current!, scene, camera);
+        console.log(`🖼️ 픽셀 검증 결과: ${pixelCheck2}`);
+        
+        const isModelVisible2 = meshCheck2 && pixelCheck2;
         
         if (!isModelVisible2) {
-          console.warn('🚨 2차 검증: 4초 후에도 모델이 렌더링되지 않음. 최종 fallback...');
+          console.warn('🚨 2차 검증 실패: 5초 후에도 실제 렌더링되지 않음. 최종 fallback...');
           
           // 기존 씬 클리어
           while(scene.children.length > 0) {
@@ -430,7 +517,7 @@ export default function DesktopViewer({
         } else {
           setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(VR 브러시 지원)' : '(기본 모드)'}`);
         }
-      }, 4000);
+      }, 5000);
       
     } catch (error) {
       console.error('❌ Three-icosa 모델 로딩 오류:', error);
@@ -452,7 +539,7 @@ export default function DesktopViewer({
         throw fallbackError;
       }
     }
-  }, [modelPath, loadTransparentGLTF, loadBasicGLTF, detectBrushType, verifyModelRendered]);
+  }, [modelPath, loadTransparentGLTF, loadBasicGLTF, detectBrushType, verifyModelRendered, verifyActualRendering]);
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
