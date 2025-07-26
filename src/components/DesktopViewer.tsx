@@ -81,17 +81,12 @@ export default function DesktopViewer({
     controls.target.copy(center);
     controls.update();
     
-    // 모든 메시 활성화 및 기본 재질 적용
+    // 모든 메시 활성화 (원본 재질 유지)
     gltf.scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.visible = true;
         child.frustumCulled = false;
-        // 기본 재질로 덮어씌우기
-        child.material = new THREE.MeshLambertMaterial({ 
-          color: 0x888888,
-          transparent: true,
-          opacity: 0.8
-        });
+        // 원본 재질 그대로 유지 - 아무것도 변경하지 않음
       }
     });
     
@@ -421,8 +416,8 @@ export default function DesktopViewer({
   useEffect(() => {
     console.log('🌌 배경색 변경 useEffect 실행, backgroundDark:', backgroundDark);
     if (sceneRef.current) {
-      const color = backgroundDark ? 0x000000 : 0xd3c7b8;
-      console.log('🎭 Three.js 씬 배경 변경:', backgroundDark ? '검은색' : '어두운 베이지');
+      const color = backgroundDark ? 0x000000 : 0xECFFFF;
+      console.log('🎭 Three.js 씬 배경 변경:', backgroundDark ? '검은색' : '하늘색');
       sceneRef.current.background = new THREE.Color(color);
     }
   }, [backgroundDark]);
