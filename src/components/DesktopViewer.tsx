@@ -206,28 +206,68 @@ export default function DesktopViewer({
       // 🔧 모델을 씬에 추가
       scene.add(gltf.scene);
       
-      // 🎯 BubbleWand 브러시 특별 처리 (투명도 문제 해결)
-      let bubbleWandFixed = 0;
+      // 🎯 범용 브러시 머티리얼 수정 (모든 브러시에 적용)
+      let materialFixed = 0;
+      const fixedBrushes = new Set<string>();
+      
       gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.name.includes('BubbleWand')) {
-          // BubbleWand 브러시의 투명도 문제 감지 및 수정
+        if (child instanceof THREE.Mesh && child.name.startsWith('brush_')) {
+          // 브러시 이름 추출
+          const brushName = child.name.split('_')[1] || 'unknown';
+          
           if (child.material) {
             const materials = Array.isArray(child.material) ? child.material : [child.material];
             materials.forEach((material, index) => {
-              // 투명도가 너무 낮은 경우 수정
+              let needsUpdate = false;
+              
+              // 1. 투명도 문제 수정 (모든 브러시)
               if (material.opacity < 0.1 || (material.transparent && material.opacity < 0.3)) {
-                material.opacity = Math.max(material.opacity, 0.7); // 최소 70% 리베도
+                material.opacity = Math.max(material.opacity, 0.7);
                 material.transparent = material.opacity < 1.0;
-                bubbleWandFixed++;
-                console.log(`🪷 BubbleWand 투명도 수정: ${child.name}[${index}] opacity: ${material.opacity}`);
+                needsUpdate = true;
+                console.log(`🪷 ${brushName} 투명도 수정: ${child.name}[${index}] opacity: ${material.opacity}`);
+              }
+              
+              // 2. ✨ 조명 유니폼 자동 수정 (RawShaderMaterial만)
+              if (material.type === 'RawShaderMaterial' && material.uniforms) {
+                // 조명 관련 유니폼들 체크 및 수정
+                const lightUniforms = [
+                  { name: 'u_ambient_light_color', defaultValue: [0.4, 0.4, 0.4, 1.0] },
+                  { name: 'u_SceneLight_0_color', defaultValue: [1.0, 1.0, 1.0, 1.0] },
+                  { name: 'u_SceneLight_1_color', defaultValue: [0.6, 0.6, 0.6, 1.0] },
+                  { name: 'u_SpecColor', defaultValue: [0.3, 0.3, 0.3] }
+                ];
+                
+                lightUniforms.forEach(({ name, defaultValue }) => {
+                  const uniform = material.uniforms[name];
+                  if (uniform && uniform.value) {
+                    // 값이 모두 0인 경우에만 수정
+                    const isAllZero = Array.isArray(uniform.value) 
+                      ? uniform.value.every((v: number) => v === 0)
+                      : uniform.value === 0;
+                    
+                    if (isAllZero) {
+                      uniform.value = defaultValue;
+                      needsUpdate = true;
+                      console.log(`🔆 ${brushName} ${name} 수정: ${child.name}[${index}]`);
+                    }
+                  }
+                });
+              }
+              
+              if (needsUpdate) {
+                material.needsUpdate = true;
+                materialFixed++;
+                fixedBrushes.add(brushName);
               }
             });
           }
         }
       });
       
-      if (bubbleWandFixed > 0) {
-        console.log(`✨ BubbleWand 브러시 ${bubbleWandFixed}개 투명도 문제 수정 완료`);
+      if (materialFixed > 0) {
+        console.log(`✨ 브러시 머티리얼 자동 수정 완료: ${materialFixed}개 머티리얼, ${fixedBrushes.size}개 브러시 타입`);
+        console.log(`📋 수정된 브러시들:`, Array.from(fixedBrushes));
       }
       
       // 🔧 향상된 바운딩 박스 계산
