@@ -57,7 +57,7 @@ export default function DesktopViewer({
       // 🔧 Three-Icosa 확장자 등록 (개선된 에러 처리)
       try {
         const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
-        const assetUrl = 'https://cdn.jsdelivr.net/npm/three-icosa@latest/brushes/';
+        const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
         loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
         threeIcosaLoaded = true;
         console.log('✅ Three-Icosa 확장자 등록 성공');
