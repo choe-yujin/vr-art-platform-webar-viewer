@@ -210,14 +210,30 @@ export default function DesktopViewer({
       let materialFixed = 0;
       const fixedBrushes = new Set<string>();
       
+      console.log('🔍 브러시 수정 로직 시작!'); // 강제 디버깅
+      
       gltf.scene.traverse((child) => {
+        console.log('🔍 순회 중:', child.name, child.type); // 모든 자식 노드 출력
+        
         if (child instanceof THREE.Mesh && child.name.startsWith('brush_')) {
+          console.log('🎯 브러시 메시 발견:', child.name); // 브러시 발견 로그
+          
           // 브러시 이름 추출
           const brushName = child.name.split('_')[1] || 'unknown';
+          console.log('🎨 브러시 이름:', brushName);
           
           if (child.material) {
             const materials = Array.isArray(child.material) ? child.material : [child.material];
+            console.log('📝 머티리얼 개수:', materials.length);
+            
             materials.forEach((material, index) => {
+              console.log(`📝 머티리얼 ${index}:`, {
+                type: material.type,
+                opacity: material.opacity,
+                transparent: material.transparent,
+                hasUniforms: !!material.uniforms
+              });
+              
               let needsUpdate = false;
               
               // 1. 투명도 문제 수정 (모든 브러시)
@@ -230,6 +246,8 @@ export default function DesktopViewer({
               
               // 2. ✨ 조명 유니폼 자동 수정 (RawShaderMaterial만)
               if (material.type === 'RawShaderMaterial' && material.uniforms) {
+                console.log(`🔆 RawShaderMaterial 발견: ${child.name}[${index}]`);
+                
                 // 조명 관련 유니폼들 체크 및 수정
                 const lightUniforms = [
                   { name: 'u_ambient_light_color', defaultValue: [0.4, 0.4, 0.4, 1.0] },
@@ -240,11 +258,15 @@ export default function DesktopViewer({
                 
                 lightUniforms.forEach(({ name, defaultValue }) => {
                   const uniform = material.uniforms[name];
+                  console.log(`🔍 유니폼 ${name}:`, uniform ? uniform.value : '없음');
+                  
                   if (uniform && uniform.value) {
                     // 값이 모두 0인 경우에만 수정
                     const isAllZero = Array.isArray(uniform.value) 
                       ? uniform.value.every((v: number) => v === 0)
                       : uniform.value === 0;
+                    
+                    console.log(`🔍 ${name} 모두 0인가?`, isAllZero, uniform.value);
                     
                     if (isAllZero) {
                       uniform.value = defaultValue;
@@ -259,15 +281,20 @@ export default function DesktopViewer({
                 material.needsUpdate = true;
                 materialFixed++;
                 fixedBrushes.add(brushName);
+                console.log(`✨ 수정 완료: ${child.name}[${index}]`);
               }
             });
           }
         }
       });
       
+      console.log('🔍 브러시 수정 로직 완료!');
+      
       if (materialFixed > 0) {
         console.log(`✨ 브러시 머티리얼 자동 수정 완료: ${materialFixed}개 머티리얼, ${fixedBrushes.size}개 브러시 타입`);
         console.log(`📋 수정된 브러시들:`, Array.from(fixedBrushes));
+      } else {
+        console.log('⚠️ 수정된 머티리얼이 없습니다!');
       }
       
       // 🔧 향상된 바운딩 박스 계산
