@@ -48,10 +48,74 @@ export default function DesktopViewer({
     onLoadErrorRef.current = onLoadError;
   }, [onLoadComplete, onLoadError]);
 
+  // 🔥 기본 GLTF 뷰어로 fallback 하는 함수
+  const loadBasicGLTF = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
+    console.log('🔄 기본 GLTF 뷰어로 fallback 시도...');
+    setDebugInfo('기본 GLTF 뷰어로 다시 로딩 중...');
+    
+    const basicLoader = new GLTFLoader();
+    const gltf = await basicLoader.loadAsync(modelPath);
+    
+    // 조명 시스템 추가
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(5, 5, 5);
+    scene.add(directionalLight);
+    
+    scene.add(gltf.scene);
+    
+    // 바운딩 박스 계산 및 카메라 설정
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    camera.position.set(
+      center.x + maxDimension * 1.5,
+      center.y + maxDimension * 1.5,
+      center.z + maxDimension * 1.5
+    );
+    camera.lookAt(center);
+    controls.target.copy(center);
+    controls.update();
+    
+    // 모든 메시 활성화 및 기본 재질 적용
+    gltf.scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.visible = true;
+        child.frustumCulled = false;
+        // 기본 재질로 덮어씌우기
+        child.material = new THREE.MeshLambertMaterial({ 
+          color: 0x888888,
+          transparent: true,
+          opacity: 0.8
+        });
+      }
+    });
+    
+    setDebugInfo('기본 GLTF 뷰어로 로딩 완료!');
+    console.log('✅ 기본 GLTF 뷰어로 성공적으로 로드됨');
+  }, [modelPath]);
+
+  // 🔥 렌더링 검증 함수
+  const verifyModelRendered = useCallback((scene: THREE.Scene): boolean => {
+    let visibleMeshCount = 0;
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.visible) {
+        visibleMeshCount++;
+      }
+    });
+    console.log(`🔍 렌더링 검증: 가시적 메시 개수 = ${visibleMeshCount}`);
+    return visibleMeshCount > 0;
+  }, []);
+
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
       const loader = new GLTFLoader();
       let threeIcosaLoaded = false;
+      let needsFallback = false;
       
       // 🔥 안정적인 three-icosa 처리: CORS 에러 시 자동으로 기본 모드로 fallback
       try {
@@ -63,9 +127,16 @@ export default function DesktopViewer({
       } catch (icosaError) {
         console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
         threeIcosaLoaded = false;
+        needsFallback = true;
       }
 
-      // 🔥 타임아웃 설정: 30초 이내에 로딩 완료되지 않으면 에러 처리
+      // Three-icosa 로드가 실패했다면 바로 기본 뷰어로 fallback
+      if (needsFallback) {
+        await loadBasicGLTF(scene, camera, controls);
+        return;
+      }
+
+      // 🔥 타임아웃 설정: 15초 이내에 로딩 완료되지 않으면 에러 처리
       const loadPromise = loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
           const percent = Math.min(Math.round((progress.loaded / progress.total) * 100), 99);
@@ -74,7 +145,7 @@ export default function DesktopViewer({
       });
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('모델 로딩 타임아웃 (30초 초과)')), 30000);
+        setTimeout(() => reject(new Error('모델 로딩 타임아웃 (15초 초과)')), 15000);
       });
 
       const gltf = await Promise.race([loadPromise, timeoutPromise]) as { scene: THREE.Group };
@@ -122,15 +193,51 @@ export default function DesktopViewer({
         }
       });
       
-      setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(VR 브러시 지원)' : '(기본 모드)'}`);
+      // 🔥 3초 후 렌더링 검증 - 실제로 모델이 보이는지 확인
+      setTimeout(async () => {
+        const isModelVisible = verifyModelRendered(scene);
+        
+        if (!isModelVisible) {
+          console.warn('⚠️ Three-icosa로 로드했지만 모델이 렌더링되지 않음. 기본 뷰어로 fallback...');
+          
+          // 기존 씬 클리어
+          while(scene.children.length > 0) {
+            scene.remove(scene.children[0]);
+          }
+          
+          // 기본 GLTF 뷰어로 다시 로드
+          try {
+            await loadBasicGLTF(scene, camera, controls);
+          } catch (fallbackError) {
+            console.error('❌ 기본 뷰어 fallback도 실패:', fallbackError);
+            throw new Error('모든 로딩 방법이 실패했습니다.');
+          }
+        } else {
+          setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(VR 브러시 지원)' : '(기본 모드)'}`);
+        }
+      }, 3000);
       
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ 모델 로딩 오류:', error);
-      setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
-      throw error;
+      console.error('❌ Three-icosa 모델 로딩 오류:', error);
+      
+      // 🔥 에러 발생 시 자동으로 기본 GLTF 뷰어로 fallback
+      try {
+        console.log('🔄 에러 발생으로 인한 기본 뷰어 fallback 시도...');
+        
+        // 기존 씬 클리어
+        while(scene.children.length > 0) {
+          scene.remove(scene.children[0]);
+        }
+        
+        await loadBasicGLTF(scene, camera, controls);
+      } catch (fallbackError) {
+        const errorMessage = fallbackError instanceof Error ? fallbackError.message : 'Unknown error';
+        console.error('❌ 기본 뷰어 fallback도 실패:', fallbackError);
+        setDebugInfo(`모든 로딩 방법이 실패: ${errorMessage}`);
+        throw fallbackError;
+      }
     }
-  }, [modelPath]);
+  }, [modelPath, loadBasicGLTF, verifyModelRendered]);
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
