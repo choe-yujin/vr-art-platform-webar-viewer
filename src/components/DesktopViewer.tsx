@@ -232,6 +232,27 @@ function processAllBrushesOriginal(gltfScene: THREE.Object3D, modelPath: string)
               }
             });
             
+            // 🎯 일반적인 Material 속성 자동 보정 로직
+            const shaderMaterial = materialWithUniforms as any;
+            
+            // transparent가 null/undefined이면 자동 보정
+            if (shaderMaterial.transparent === null || shaderMaterial.transparent === undefined) {
+              shaderMaterial.transparent = true;
+              console.log(`🔧 ${brushName} transparent 자동 보정: null/undefined → true`);
+            }
+            
+            // transparent가 true이고 side가 FrontSide(1)이면 DoubleSide(2)로 변경
+            if (shaderMaterial.transparent && shaderMaterial.side === 1) {
+              shaderMaterial.side = THREE.DoubleSide;
+              console.log(`🔧 ${brushName} side 자동 보정: FrontSide(1) → DoubleSide(2)`);
+            }
+            
+            // transparent가 true이면 depthWrite를 false로 설정 (투명 객체 최적화)
+            if (shaderMaterial.transparent && shaderMaterial.depthWrite !== false) {
+              shaderMaterial.depthWrite = false;
+              console.log(`🔧 ${brushName} depthWrite 자동 보정: true → false (투명 객체 최적화)`);
+            }
+            
             materialWithUniforms.needsUpdate = true;
             
             // 셰이더 컴파일 상태만 확인 (fallback 적용 안함)
