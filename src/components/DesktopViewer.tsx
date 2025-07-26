@@ -260,7 +260,17 @@ export default function DesktopViewer({
                   const uniform = material.uniforms[name];
                   console.log(`🔍 유니폼 ${name}:`, uniform ? uniform.value : '없음');
                   
-                  if (uniform && uniform.value) {
+                  // 유니폼이 아예 없거나 값이 모두 0인 경우 수정
+                  if (!uniform) {
+                    // 유니폼이 없는 경우 새로 생성
+                    if (name === 'u_ambient_light_color' || name.includes('color')) {
+                      material.uniforms[name] = { value: new THREE.Vector4(...defaultValue) };
+                    } else {
+                      material.uniforms[name] = { value: new THREE.Vector3(...defaultValue) };
+                    }
+                    needsUpdate = true;
+                    console.log(`🆕 ${brushName} ${name} 새로 생성: ${child.name}[${index}]`);
+                  } else if (uniform.value) {
                     // 값이 모두 0인 경우에만 수정
                     const isAllZero = Array.isArray(uniform.value) 
                       ? uniform.value.every((v: number) => v === 0)
@@ -269,7 +279,11 @@ export default function DesktopViewer({
                     console.log(`🔍 ${name} 모두 0인가?`, isAllZero, uniform.value);
                     
                     if (isAllZero) {
-                      uniform.value = defaultValue;
+                      if (name === 'u_ambient_light_color' || name.includes('color')) {
+                        uniform.value = new THREE.Vector4(...defaultValue);
+                      } else {
+                        uniform.value = new THREE.Vector3(...defaultValue);
+                      }
                       needsUpdate = true;
                       console.log(`🔆 ${brushName} ${name} 수정: ${child.name}[${index}]`);
                     }
