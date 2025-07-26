@@ -7,287 +7,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ArtworkResponse } from '@/utils/api';
 
-// 🔍 근본 원인 디버깅을 위한 메시 렌더링 상태 분석
-function debugMeshRenderingState(gltfScene: THREE.Object3D, modelPath: string) {
-  console.log('🔍 === 메시 렌더링 상태 디버깅 시작 ===');
-  console.log('작품 경로:', modelPath);
-  
-  const renderingDebug = {
-    총메시수: 0,
-    브러시메시수: 0,
-    렌더링가능메시수: 0,
-    문제메시수: 0,
-    메시상세: [] as Array<{
-      이름: string;
-      브러시: string;
-      visible: boolean;
-      geometry: string;
-      material: string;
-      vertices: number;
-      materialProperties: Record<string, any>;
-      문제점: string[];
-    }>
-  };
-  
-  gltfScene.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      renderingDebug.총메시수++;
-      
-      if (child.name.startsWith('brush_')) {
-        renderingDebug.브러시메시수++;
-        
-        const brushName = child.name.split('_')[1] || 'Unknown';
-        const 문제점: string[] = [];
-        
-        // 🔍 1. 가시성 검사
-        if (!child.visible) {
-          문제점.push('visible = false');
-        }
-        
-        // 🔍 2. Geometry 검사
-        let geometryInfo = 'NO_GEOMETRY';
-        let vertices = 0;
-        if (child.geometry) {
-          geometryInfo = child.geometry.type;
-          vertices = child.geometry.attributes.position?.count || 0;
-          if (vertices === 0) {
-            문제점.push('vertices = 0');
-          }
-        } else {
-          문제점.push('geometry 없음');
-        }
-        
-        // 🔍 3. Material 검사
-        let materialInfo = 'NO_MATERIAL';
-        let materialProperties: Record<string, any> = {};
-        
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            materialInfo = child.material.map(m => m.type).join('+');
-            materialProperties = {
-              count: child.material.length,
-              types: child.material.map(m => m.type),
-              visible: child.material.map(m => m.visible),
-              opacity: child.material.map(m => (m as any).opacity)
-            };
-          } else {
-            const material = child.material;
-            materialInfo = material.type;
-            materialProperties = {
-              type: material.type,
-              visible: material.visible,
-              opacity: (material as any).opacity,
-              transparent: (material as any).transparent,
-              side: (material as any).side,
-              depthTest: (material as any).depthTest,
-              depthWrite: (material as any).depthWrite
-            };
-            
-            // RawShaderMaterial 특별 검사
-            if (material.type === 'RawShaderMaterial') {
-              const shaderMaterial = material as any;
-              materialProperties.hasUniforms = !!shaderMaterial.uniforms;
-              materialProperties.uniformCount = shaderMaterial.uniforms ? Object.keys(shaderMaterial.uniforms).length : 0;
-              materialProperties.hasProgram = !!shaderMaterial.program;
-              materialProperties.vertexShaderLength = shaderMaterial.vertexShader ? shaderMaterial.vertexShader.length : 0;
-              materialProperties.fragmentShaderLength = shaderMaterial.fragmentShader ? shaderMaterial.fragmentShader.length : 0;
-              
-              if (!shaderMaterial.program) {
-                문제점.push('셰이더 프로그램 없음');
-              }
-            }
-          }
-          
-          // Material visible 검사
-          if (Array.isArray(child.material)) {
-            const invisibleMaterials = child.material.filter(m => !m.visible);
-            if (invisibleMaterials.length > 0) {
-              문제점.push(`${invisibleMaterials.length}개 머티리얼 invisible`);
-            }
-          } else if (!child.material.visible) {
-            문제점.push('material.visible = false');
-          }
-        } else {
-          문제점.push('material 없음');
-        }
-        
-        // 🔍 4. Three.js Object3D 속성 검사
-        if (child.scale.x === 0 || child.scale.y === 0 || child.scale.z === 0) {
-          문제점.push(`scale 문제: (${child.scale.x}, ${child.scale.y}, ${child.scale.z})`);
-        }
-        
-        const meshDetail = {
-          이름: child.name,
-          브러시: brushName,
-          visible: child.visible,
-          geometry: geometryInfo,
-          material: materialInfo,
-          vertices: vertices,
-          materialProperties: materialProperties,
-          문제점: 문제점
-        };
-        
-        renderingDebug.메시상세.push(meshDetail);
-        
-        // 렌더링 가능 여부 판단
-        if (문제점.length === 0) {
-          renderingDebug.렌더링가능메시수++;
-          console.log(`✅ 렌더링 가능: ${child.name}`, meshDetail);
-        } else {
-          renderingDebug.문제메시수++;
-          console.log(`❌ 렌더링 문제: ${child.name}`, meshDetail);
-        }
-      }
-    }
-  });
-  
-  // 🔍 5. 최종 분석 결과
-  console.log('\n📊 === 메시 렌더링 디버깅 결과 ===');
-  console.log('전체 통계:', {
-    총메시수: renderingDebug.총메시수,
-    브러시메시수: renderingDebug.브러시메시수,
-    렌더링가능: renderingDebug.렌더링가능메시수,
-    문제있음: renderingDebug.문제메시수
-  });
-  
-  // 브러시별 그룹화
-  const 브러시별분석 = renderingDebug.메시상세.reduce((acc, mesh) => {
-    if (!acc[mesh.브러시]) {
-      acc[mesh.브러시] = {
-        총개수: 0,
-        렌더링가능: 0,
-        문제있음: 0,
-        공통문제: [] as string[]
-      };
-    }
-    
-    acc[mesh.브러시].총개수++;
-    if (mesh.문제점.length === 0) {
-      acc[mesh.브러시].렌더링가능++;
-    } else {
-      acc[mesh.브러시].문제있음++;
-      // 공통 문제점 수집
-      mesh.문제점.forEach(문제 => {
-        if (!acc[mesh.브러시].공통문제.includes(문제)) {
-          acc[mesh.브러시].공통문제.push(문제);
-        }
-      });
-    }
-    
-    return acc;
-  }, {} as Record<string, any>);
-  
-  console.log('\n🎨 브러시별 렌더링 분석:');
-  Object.entries(브러시별분석).forEach(([브러시명, 분석]) => {
-    console.log(`${브러시명}:`, 분석);
-  });
-  
-  console.log('\n📋 상세 메시 목록:');
-  renderingDebug.메시상세.forEach((mesh, index) => {
-    console.log(`${index + 1}. ${mesh.이름}:`, mesh);
-  });
-  
-  // 글로벌 변수로 저장
-  (window as any).meshRenderingDebug = renderingDebug;
-  console.log('\n💾 디버깅 결과가 window.meshRenderingDebug에 저장됨');
-}
-
-// 🎯 원본 브러시 처리 시스템 (회색 fallback 제거)
-function processAllBrushesOriginal(gltfScene: THREE.Object3D, modelPath: string) {
-  console.log('🎨 원본 브러시 처리 시스템 시작 (fallback 제거)');
-  
-  let totalProcessed = 0;
-  let successfulCompiles = 0;
-  let failedCompiles = 0;
-  
-  gltfScene.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.name.startsWith('brush_')) {
-      const brushName = child.name.split('_')[1] || 'Unknown';
-      totalProcessed++;
-      
-      if (child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        
-        materials.forEach((material, index) => {
-          const materialWithUniforms = material as THREE.Material & { 
-            uniforms?: Record<string, { value: unknown }>;
-            needsUpdate?: boolean;
-            program?: unknown;
-          };
-          
-          if (materialWithUniforms.type === 'RawShaderMaterial' && materialWithUniforms.uniforms) {
-            console.log(`🔍 ${brushName} 셰이더 처리: ${child.name}[${index}]`);
-            
-            // 기본 유니폼 보강만 수행 (fallback 제거)
-            const lightUniforms = {
-              u_ambient_light_color: [0.6, 0.6, 0.6, 1.0],  // 1번 작품과 동일하게
-              u_SceneLight_0_color: [0.8, 0.8, 0.8, 1.0],   // 1번 작품과 동일하게
-              u_SceneLight_1_color: [0.4, 0.4, 0.4, 1.0]    // 1번 작품과 동일하게
-            };
-            
-            Object.entries(lightUniforms).forEach(([name, defaultValue]) => {
-              if (!materialWithUniforms.uniforms![name]) {
-                materialWithUniforms.uniforms![name] = { value: new THREE.Vector4(...defaultValue) };
-                console.log(`🆕 ${brushName} ${name} 추가됨`);
-              }
-            });
-            
-            // 🎯 일반적인 Material 속성 자동 보정 로직
-            const shaderMaterial = materialWithUniforms as any;
-            
-            // transparent가 null/undefined이면 자동 보정
-            if (shaderMaterial.transparent === null || shaderMaterial.transparent === undefined) {
-              shaderMaterial.transparent = true;
-              console.log(`🔧 ${brushName} transparent 자동 보정: null/undefined → true`);
-            }
-            
-            // transparent가 true이고 side가 FrontSide(1)이면 DoubleSide(2)로 변경
-            if (shaderMaterial.transparent && shaderMaterial.side === 1) {
-              shaderMaterial.side = THREE.DoubleSide;
-              console.log(`🔧 ${brushName} side 자동 보정: FrontSide(1) → DoubleSide(2)`);
-            }
-            
-            // transparent가 true이면 depthWrite를 false로 설정 (투명 객체 최적화)
-            if (shaderMaterial.transparent && shaderMaterial.depthWrite !== false) {
-              shaderMaterial.depthWrite = false;
-              console.log(`🔧 ${brushName} depthWrite 자동 보정: true → false (투명 객체 최적화)`);
-            }
-            
-            materialWithUniforms.needsUpdate = true;
-            
-            // 셰이더 컴파일 상태만 확인 (fallback 적용 안함)
-            setTimeout(() => {
-              if (materialWithUniforms.program) {
-                successfulCompiles++;
-                console.log(`✅ ${brushName} 셰이더 컴파일 성공: ${child.name}[${index}]`);
-              } else {
-                failedCompiles++;
-                console.log(`❌ ${brushName} 셰이더 컴파일 실패: ${child.name}[${index}] - 하지만 fallback 적용 안함`);
-              }
-            }, 200);
-          } else if (materialWithUniforms.type !== 'RawShaderMaterial') {
-            // 이미 기본 Three.js 머티리얼인 경우
-            successfulCompiles++;
-            console.log(`✅ ${brushName} 기본 머티리얼 사용: ${materialWithUniforms.type}`);
-          }
-        });
-      }
-    }
-  });
-  
-  setTimeout(() => {
-    console.log(`📊 원본 브러시 처리 완료:`, {
-      전체처리: totalProcessed,
-      셰이더성공: successfulCompiles,
-      셰이더실패: failedCompiles,
-      성공률: `${Math.round((successfulCompiles / totalProcessed) * 100)}%`
-    });
-    
-    // 메시 렌더링 디버깅 실행
-    debugMeshRenderingState(gltfScene, modelPath);
-  }, 500);
-}
-
 interface DesktopViewerProps {
   modelPath: string;
   artwork?: ArtworkResponse | null;
@@ -308,6 +27,7 @@ export default function DesktopViewer({
   const [status, setStatus] = useState<'loading' | 'active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('3D 뷰어 초기화 중...');
+  const [renderMode, setRenderMode] = useState<'three-icosa' | 'basic-gltf'>('three-icosa');
   
   const [showPromoHeader, setShowPromoHeader] = useState<boolean>(true);
   const [showArtistInfo, setShowArtistInfo] = useState<boolean>(false);
@@ -330,23 +50,139 @@ export default function DesktopViewer({
     onLoadErrorRef.current = onLoadError;
   }, [onLoadComplete, onLoadError]);
 
+  // 🎯 실제 렌더링 여부 검증 (화면에 보이는지 확인)
+  const validateActualRendering = (gltfScene: THREE.Object3D, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): boolean => {
+    try {
+      // 렌더링 전후 픽셀 체크
+      const canvas = renderer.domElement;
+      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      
+      if (!gl) return false;
+      
+      // 한 프레임 렌더링
+      renderer.render(scene, camera);
+      
+      // 중앙 픽셀 샘플링 (검은 배경이 아닌지 확인)
+      const pixels = new Uint8Array(4);
+      const centerX = Math.floor(canvas.width / 2);
+      const centerY = Math.floor(canvas.height / 2);
+      
+      gl.readPixels(centerX, centerY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      
+      // RGB 값이 모두 0이 아니면 뭔가 렌더링됨
+      const hasContent = pixels[0] > 0 || pixels[1] > 0 || pixels[2] > 0;
+      
+      console.log(`🔍 실제 렌더링 검증: 중앙 픽셀 RGB(${pixels[0]}, ${pixels[1]}, ${pixels[2]}) = ${hasContent ? '렌더링됨' : '검은화면'}`);
+      
+      return hasContent;
+      
+    } catch (error) {
+      console.warn('⚠️ 렌더링 검증 실패:', error);
+      return false;
+    }
+  };
+
+  // 🎨 Three-Icosa 브러시 처리 시도 (픽셀 기반 검증)
+  const tryThreeIcosaBrushes = async (gltfScene: THREE.Object3D, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<boolean> => {
+    try {
+      const { processAllBrushes } = await import('../utils/threeicosa');
+      
+      console.log('🎨 Three-Icosa 브러시 처리 시도...');
+      
+      // 브러시 처리 시도
+      processAllBrushes(gltfScene);
+      
+      // 3초 후 실제 렌더링 여부 검증
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const isActuallyRendered = validateActualRendering(gltfScene, renderer, scene, camera);
+          console.log(`🎨 Three-Icosa 처리 결과: ${isActuallyRendered ? '화면에 보임' : '화면에 안 보임'}`);
+          resolve(isActuallyRendered);
+        }, 3000);
+      });
+      
+    } catch (error) {
+      console.warn('⚠️ Three-Icosa 처리 실패:', error);
+      return false;
+    }
+  };
+
+  // 🔧 순수 GLB로 다시 로딩 (Three-Icosa 완전 제거)
+  const fallbackToPureGLTF = async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
+    console.log('🔧 순수 GLB 렌더링으로 재시도...');
+    
+    // 기존 씬 정리
+    scene.clear();
+    
+    // 조명 다시 추가
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight1.position.set(10, 10, 5);
+    scene.add(directionalLight1);
+    
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight2.position.set(-10, -10, -5);
+    scene.add(directionalLight2);
+    
+    // Three-Icosa 없이 순수 GLTFLoader로 다시 로딩
+    const loader = new GLTFLoader();
+    
+    try {
+      const gltf = await loader.loadAsync(modelPath);
+      console.log('📦 순수 GLB 로딩 완료');
+      
+      // Three-Icosa 처리 없이 바로 씬에 추가
+      scene.add(gltf.scene);
+      
+      // 모든 메시 활성화
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.visible = true;
+          child.frustumCulled = false;
+        }
+      });
+      
+      // 카메라 재설정
+      const boundingBox = new THREE.Box3().setFromObject(gltf.scene);
+      const box = boundingBox.isEmpty() 
+        ? new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 2, 2))
+        : boundingBox;
+      
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      controls.target.copy(center);
+      const maxDimension = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * Math.PI / 180;
+      const distance = maxDimension / (2 * Math.tan(fov / 2)) * 1.8;
+      
+      camera.position.set(
+        center.x + distance * 0.7,
+        center.y + distance * 0.5,
+        center.z + distance * 0.7
+      );
+      
+      camera.lookAt(center);
+      camera.updateProjectionMatrix();
+      controls.update();
+      
+      setRenderMode('basic-gltf');
+      setDebugInfo('순수 GLB 렌더링 성공');
+      
+      console.log('✅ 순수 GLB 렌더링 완료');
+      
+    } catch (error) {
+      console.error('❌ 순수 GLB 로딩도 실패:', error);
+      throw error;
+    }
+  };
+
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
       const loader = new GLTFLoader();
-      let threeIcosaLoaded = false;
       
-      // Three-Icosa 확장자 등록
-      try {
-        const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
-        const assetUrl = 'https://raw.githubusercontent.com/icosa-foundation/three-icosa/main/brushes/';
-        loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
-        threeIcosaLoaded = true;
-        console.log('✅ Three-Icosa 확장자 등록 성공');
-      } catch (icosaError) {
-        console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
-        threeIcosaLoaded = false;
-      }
-
       const gltf = await loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
           const percent = Math.min(Math.round((progress.loaded / progress.total) * 100), 99);
@@ -354,27 +190,7 @@ export default function DesktopViewer({
         }
       });
       
-      console.log('🎯 GLB 모델 분석 시작');
-      console.log('📦 GLTF Scene:', gltf.scene);
-      console.log('👥 Children 수:', gltf.scene.children.length);
-      
-      // 모든 Mesh 요소 찾기
-      const meshes: THREE.Mesh[] = [];
-      gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          meshes.push(child);
-          console.log('🔍 Mesh 발견:', {
-            name: child.name,
-            visible: child.visible,
-            geometryType: child.geometry.type,
-            materialType: child.material ? (Array.isArray(child.material) ? child.material.map(m => m.type) : child.material.type) : 'none',
-            vertices: child.geometry?.attributes?.position?.count || 0
-          });
-        }
-      });
-      
-      console.log(`📊 총 ${meshes.length}개의 Mesh 발견`);
-      console.log(`🌨️ Three-Icosa 사용: ${threeIcosaLoaded ? 'YES' : 'NO'}`);
+      console.log('🎯 GLB 모델 로드 완료');
       
       // 조명 시스템 추가
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -393,17 +209,16 @@ export default function DesktopViewer({
       // 모델을 씬에 추가
       scene.add(gltf.scene);
       
-      // 🔍 디버깅용 전역 노출
-      (window as any).debugThreeJS = {
-        scene: scene,
-        gltfScene: gltf.scene,
-        camera: camera,
-        renderer: rendererRef.current
-      };
-      console.log('🔍 Three.js 객체들을 window.debugThreeJS에 노출');
+      // 🎯 Three-Icosa 브러시 처리 시도
+      const brushSuccess = await tryThreeIcosaBrushes(gltf.scene, rendererRef.current!, scene, camera);
       
-      // 🎨 원본 브러시 처리 (회색 fallback 제거)
-      processAllBrushesOriginal(gltf.scene, modelPath);
+      if (!brushSuccess) {
+        // 브러시 처리 실패 시 순수 GLB로 재로딩
+        await fallbackToPureGLTF(scene, camera, controls);
+      } else {
+        setRenderMode('three-icosa');
+        setDebugInfo('Three-Icosa 브러시 렌더링 성공');
+      }
       
       // 바운딩 박스 계산 및 카메라 설정
       const boundingBox = new THREE.Box3().setFromObject(gltf.scene);
@@ -454,8 +269,6 @@ export default function DesktopViewer({
       });
       
       console.log(`👁️ 총 ${visibleMeshCount}개 메시 활성화`);
-      
-      setDebugInfo(`모델 로딩 완료! Meshes: ${meshes.length}, ${threeIcosaLoaded ? '(Tilt Brush)' : ''}`);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -620,6 +433,13 @@ export default function DesktopViewer({
         className="absolute inset-0 w-full h-full"
         style={{ backgroundColor: backgroundDark ? '#000000' : '#d3c7b8' }}
       />
+      
+      {/* 렌더 모드 표시 */}
+      {status === 'active' && (
+        <div className="fixed top-20 left-6 bg-black/70 backdrop-blur-md text-white px-3 py-2 rounded-lg z-10 text-sm">
+          {renderMode === 'three-icosa' ? '🎨 VR 브러시 렌더링' : '📦 기본 GLTF 렌더링'}
+        </div>
+      )}
       
       {/* 프로모션 헤더 */}
       {showPromoHeader && (
@@ -861,4 +681,4 @@ export default function DesktopViewer({
       )}
     </div>
   );
-}
+};
