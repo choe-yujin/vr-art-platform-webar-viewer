@@ -98,6 +98,88 @@ export default function DesktopViewer({
       console.log(`📊 총 ${meshes.length}개의 Mesh 발견`);
       console.log(`🌨️ Three-Icosa 사용: ${threeIcosaLoaded ? 'YES' : 'NO'} - ${threeIcosaLoaded ? '브러시 머티리얼 사용' : '기본 GLB 로더 사용'}`);
       
+      // === 📊 작품 브러시 분석 시작 ===
+      console.log('=== 📊 작품 브러시 분석 시작 ===');
+      console.log('현재 작품 경로:', modelPath);
+      
+      const brushAnalysis = {
+        총메시수: 0,
+        브러시별통계: {} as Record<string, {
+          개수: number;
+          메시목록: string[];
+          머티리얼타입: string[];
+          렌더링상태: boolean[];
+        }>,
+        전체브러시목록: [] as Array<{
+          메시이름: string;
+          브러시: string;
+          머티리얼: string;
+          표시상태: boolean;
+        }>
+      };
+      
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          brushAnalysis.총메시수++;
+          
+          // 브러시 이름 추출 (brush_BRUSHNAME_g0_b0 패턴에서)
+          let brushName = 'unknown';
+          if (child.name.startsWith('brush_')) {
+            const parts = child.name.split('_');
+            if (parts.length >= 2) {
+              brushName = parts[1];
+            }
+          }
+          
+          // 브러시별 통계
+          if (!brushAnalysis.브러시별통계[brushName]) {
+            brushAnalysis.브러시별통계[brushName] = {
+              개수: 0,
+              메시목록: [],
+              머티리얼타입: [],
+              렌더링상태: []
+            };
+          }
+          
+          const brushData = brushAnalysis.브러시별통계[brushName];
+          brushData.개수++;
+          brushData.메시목록.push(child.name);
+          brushData.렌더링상태.push(child.visible);
+          
+          const materialType = child.material ? (Array.isArray(child.material) ? child.material.map(m => m.type).join('+') : child.material.type) : 'none';
+          if (!brushData.머티리얼타입.includes(materialType)) {
+            brushData.머티리얼타입.push(materialType);
+          }
+          
+          // 상세 정보 로깅
+          console.log(`🎨 ${child.name}:`, {
+            브러시: brushName,
+            머티리얼: materialType,
+            버텍스: child.geometry?.attributes?.position?.count || 0,
+            표시: child.visible,
+            투명도: child.material ? (Array.isArray(child.material) ? child.material[0]?.opacity : child.material.opacity) : undefined,
+            위치: {
+              x: parseFloat(child.position.x.toFixed(2)),
+              y: parseFloat(child.position.y.toFixed(2)), 
+              z: parseFloat(child.position.z.toFixed(2))
+            },
+            유니폼수: child.material?.uniforms ? Object.keys(child.material.uniforms).length : 0
+          });
+          
+          brushAnalysis.전체브러시목록.push({
+            메시이름: child.name,
+            브러시: brushName,
+            머티리얼: materialType,
+            표시상태: child.visible
+          });
+        }
+      });
+      
+      console.log('📈 브러시 사용 통계:', brushAnalysis.브러시별통계);
+      console.log('🎯 Three-icosa 활성화:', threeIcosaLoaded ? 'YES' : 'NO');
+      console.log('📋 전체 브러시 목록:', brushAnalysis.전체브러시목록);
+      console.log('=== 📊 브러시 분석 완료 ===');
+      
       // 🔧 강화된 조명 시스템 추가 (항상 추가)
       // 기존 조명 제거
       const existingLights = scene.children.filter(child => 
