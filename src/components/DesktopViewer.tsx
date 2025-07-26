@@ -311,6 +311,28 @@ export default function DesktopViewer({
                     console.log(`🟢 셰이더 컴파일 성공: ${child.name}[${index}]`);
                   } else {
                     console.error(`🔴 셰이더 컴파일 실패: ${child.name}[${index}]`);
+                    
+                    // 🚪 BubbleWand 셰이더 실패 시 기본 머티리얼로 바꿀서 할백
+                    if (brushName === 'BubbleWand') {
+                      console.log(`🔄 BubbleWand 셰이더 실패 - 기본 머티리얼로 할백: ${child.name}[${index}]`);
+                      
+                      // 기본 머티리얼로 교체
+                      const fallbackMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x00aaff, // 파란색
+                        transparent: true,
+                        opacity: 0.8,
+                        roughness: 0.3,
+                        metalness: 0.1
+                      });
+                      
+                      if (Array.isArray(child.material)) {
+                        child.material[index] = fallbackMaterial;
+                      } else {
+                        child.material = fallbackMaterial;
+                      }
+                      
+                      console.log(`✨ BubbleWand 할백 머티리얼 적용 완료: ${child.name}[${index}]`);
+                    }
                   }
                 }, 100);
               }
