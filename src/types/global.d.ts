@@ -31,7 +31,8 @@ declare global {
   interface Window {
     MindAR_THREE?: typeof THREE;
     MindAR_MindARThree?: MindARThreeConstructor;
-    MindAR_GLTFLoader?: typeof GLTFLoader; 
+    MindAR_GLTFLoader?: typeof GLTFLoader;
+    brushFallbackStats?: Record<string, number>; // 브러시 할백 통계
   }
 }
 

@@ -57,10 +57,10 @@ export default function DesktopViewer({
       // 🔧 Three-Icosa 확장자 등록 (개선된 에러 처리)
       try {
         const { GLTFGoogleTiltBrushMaterialExtension } = await import('three-icosa');
-        const assetUrl = 'https://icosa-foundation.github.io/icosa-sketch-assets/brushes/';
+        const assetUrl = 'https://raw.githubusercontent.com/icosa-foundation/three-icosa/main/brushes/';
         loader.register(parser => new GLTFGoogleTiltBrushMaterialExtension(parser, assetUrl));
         threeIcosaLoaded = true;
-        console.log('✅ Three-Icosa 확장자 등록 성공');
+        console.log('✅ Three-Icosa 확장자 등록 성공 - 전체 브러시 라이브러리 사용');
       } catch (icosaError) {
         console.warn('⚠️ Three-Icosa 로드 실패:', icosaError);
         console.warn('📋 기본 GLB 로더만 사용합니다.');
@@ -244,11 +244,15 @@ export default function DesktopViewer({
                 console.log(`🪷 ${brushName} 투명도 수정: ${child.name}[${index}] opacity: ${material.opacity}`);
               }
               
-              // 2. ✨ 조명 유니폼 자동 수정 (RawShaderMaterial만)
+              // 2. ✨ 조명 유니폼 자동 수정 (RawShaderMaterial만) - 개선된 방식
               if (material.type === 'RawShaderMaterial' && material.uniforms) {
                 console.log(`🔆 RawShaderMaterial 발견: ${child.name}[${index}]`);
                 
-                // 조명 관련 유니폼들 체크 및 수정
+                // 🔍 실제 셰이더에서 사용하는 유니폼만 확인하고 수정
+                const vertexShader = material.vertexShader;
+                const fragmentShader = material.fragmentShader;
+                
+                // 셰이더 코드에서 실제 사용되는 유니폼만 처리
                 const lightUniforms = [
                   { name: 'u_ambient_light_color', defaultValue: [0.4, 0.4, 0.4, 1.0] },
                   { name: 'u_SceneLight_0_color', defaultValue: [1.0, 1.0, 1.0, 1.0] },
@@ -257,36 +261,42 @@ export default function DesktopViewer({
                 ];
                 
                 lightUniforms.forEach(({ name, defaultValue }) => {
-                  const uniform = material.uniforms[name];
-                  console.log(`🔍 유니폼 ${name}:`, uniform ? uniform.value : '없음');
+                  // 셰이더 코드에서 실제로 이 유니폼을 사용하는지 확인
+                  const isUsedInShader = (vertexShader && vertexShader.includes(name)) || 
+                                        (fragmentShader && fragmentShader.includes(name));
                   
-                  // 유니폼이 아예 없거나 값이 모두 0인 경우 수정
-                  if (!uniform) {
-                    // 유니폼이 없는 경우 새로 생성
-                    if (name === 'u_ambient_light_color' || name.includes('color')) {
-                      material.uniforms[name] = { value: new THREE.Vector4(...defaultValue) };
-                    } else {
-                      material.uniforms[name] = { value: new THREE.Vector3(...defaultValue) };
-                    }
-                    needsUpdate = true;
-                    console.log(`🆕 ${brushName} ${name} 새로 생성: ${child.name}[${index}]`);
-                  } else if (uniform.value) {
-                    // 값이 모두 0인 경우에만 수정
-                    const isAllZero = Array.isArray(uniform.value) 
-                      ? uniform.value.every((v: number) => v === 0)
-                      : uniform.value === 0;
+                  if (isUsedInShader) {
+                    const uniform = material.uniforms[name];
+                    console.log(`🔍 유니폼 ${name} (셰이더에서 사용됨):`, uniform ? uniform.value : '없음');
                     
-                    console.log(`🔍 ${name} 모두 0인가?`, isAllZero, uniform.value);
-                    
-                    if (isAllZero) {
+                    // 유니폼이 아예 없거나 값이 모두 0인 경우 수정
+                    if (!uniform) {
+                      // 유니폼이 없는 경우 새로 생성
                       if (name === 'u_ambient_light_color' || name.includes('color')) {
-                        uniform.value = new THREE.Vector4(...defaultValue);
+                        material.uniforms[name] = { value: new THREE.Vector4(...defaultValue) };
                       } else {
-                        uniform.value = new THREE.Vector3(...defaultValue);
+                        material.uniforms[name] = { value: new THREE.Vector3(...defaultValue) };
                       }
                       needsUpdate = true;
-                      console.log(`🔆 ${brushName} ${name} 수정: ${child.name}[${index}]`);
+                      console.log(`🆕 ${brushName} ${name} 새로 생성: ${child.name}[${index}]`);
+                    } else if (uniform.value) {
+                      // 값이 모두 0인 경우에만 수정
+                      const isAllZero = Array.isArray(uniform.value) 
+                        ? uniform.value.every((v: number) => v === 0)
+                        : uniform.value === 0;
+                      
+                      if (isAllZero) {
+                        if (name === 'u_ambient_light_color' || name.includes('color')) {
+                          uniform.value = new THREE.Vector4(...defaultValue);
+                        } else {
+                          uniform.value = new THREE.Vector3(...defaultValue);
+                        }
+                        needsUpdate = true;
+                        console.log(`🔆 ${brushName} ${name} 수정: ${child.name}[${index}]`);
+                      }
                     }
+                  } else {
+                    console.log(`⚠️ 유니폼 ${name}은 셰이더에서 사용되지 않음`);
                   }
                 });
               }
@@ -312,27 +322,63 @@ export default function DesktopViewer({
                   } else {
                     console.error(`🔴 셰이더 컴파일 실패: ${child.name}[${index}]`);
                     
-                    // 🚪 BubbleWand 셰이더 실패 시 기본 머티리얼로 바꿀서 할백
-                    if (brushName === 'BubbleWand') {
-                      console.log(`🔄 BubbleWand 셰이더 실패 - 기본 머티리얼로 할백: ${child.name}[${index}]`);
-                      
-                      // 기본 머티리얼로 교체
-                      const fallbackMaterial = new THREE.MeshStandardMaterial({
-                        color: 0x00aaff, // 파란색
-                        transparent: true,
-                        opacity: 0.8,
-                        roughness: 0.3,
-                        metalness: 0.1
-                      });
-                      
-                      if (Array.isArray(child.material)) {
-                        child.material[index] = fallbackMaterial;
-                      } else {
-                        child.material = fallbackMaterial;
+                    // 🚪 모든 브러시 셰이더 실패 시 원본 색상 보존 할백
+                    console.log(`🔄 ${brushName} 셰이더 실패 - 원본 색상 보존 할백: ${child.name}[${index}]`);
+                    
+                    // 🎨 원본 색상 정보 추출
+                    let originalColor = 0x888888; // 기본 회색
+                    let originalOpacity = 0.8;
+                    
+                    // 기존 머티리얼에서 색상 정보 추출 시도
+                    if (material.uniforms) {
+                      // 일반적인 색상 유니폼들 체크
+                      const colorUniforms = ['u_color', 'u_Color', 'u_main_color', 'u_MainColor', 'u_diffuse', 'u_Diffuse'];
+                      for (const colorUniform of colorUniforms) {
+                        if (material.uniforms[colorUniform]) {
+                          const colorValue = material.uniforms[colorUniform].value;
+                          if (colorValue) {
+                            if (typeof colorValue === 'object' && colorValue.isColor) {
+                              originalColor = colorValue.getHex();
+                            } else if (Array.isArray(colorValue) && colorValue.length >= 3) {
+                              originalColor = new THREE.Color(colorValue[0], colorValue[1], colorValue[2]).getHex();
+                            }
+                            console.log(`🎨 ${brushName} 원본 색상 발견: ${colorUniform} = ${originalColor.toString(16)}`);
+                            break;
+                          }
+                        }
                       }
                       
-                      console.log(`✨ BubbleWand 할백 머티리얼 적용 완료: ${child.name}[${index}]`);
+                      // 투명도 정보 추출
+                      if (material.uniforms.u_opacity && material.uniforms.u_opacity.value) {
+                        originalOpacity = material.uniforms.u_opacity.value;
+                      } else if (material.opacity) {
+                        originalOpacity = material.opacity;
+                      }
                     }
+                    
+                    // 🆕 원본 색상을 유지한 할백 머티리얼 생성
+                    const fallbackMaterial = new THREE.MeshStandardMaterial({
+                      color: originalColor,
+                      transparent: true,
+                      opacity: Math.max(originalOpacity, 0.3), // 최소 30% 투명도
+                      roughness: 0.4,
+                      metalness: 0.1,
+                      emissive: new THREE.Color(originalColor).multiplyScalar(0.1) // 약간의 발광
+                    });
+                    
+                    // 🔄 머티리얼 교체
+                    if (Array.isArray(child.material)) {
+                      child.material[index] = fallbackMaterial;
+                    } else {
+                      child.material = fallbackMaterial;
+                    }
+                    
+                    console.log(`✨ ${brushName} 할백 머티리얼 적용 완료: 색상=${originalColor.toString(16)}, 투명도=${originalOpacity}`);
+                    
+                    // 📝 전체 할백 통계 업데이트
+                    if (!window.brushFallbackStats) window.brushFallbackStats = {};
+                    if (!window.brushFallbackStats[brushName]) window.brushFallbackStats[brushName] = 0;
+                    window.brushFallbackStats[brushName]++;
                   }
                 }, 100);
               }
@@ -473,6 +519,15 @@ export default function DesktopViewer({
         
         if (renderingMeshes === 0) {
           console.error(`🚨 렌더링 중인 메시가 없습니다!`);
+        }
+        
+        // 📊 할백 통계 출력
+        if (window.brushFallbackStats && Object.keys(window.brushFallbackStats).length > 0) {
+          console.log('📊 브러시 할백 통계:', window.brushFallbackStats);
+          const totalFallbacks = Object.values(window.brushFallbackStats).reduce((a, b) => a + b, 0);
+          console.log(`🔄 총 ${totalFallbacks}개 브러시가 할백됨`);
+        } else {
+          console.log('✅ 모든 브러시 셰이더 컴파일 성공!');
         }
       }, 500);
       
