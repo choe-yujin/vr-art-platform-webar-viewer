@@ -291,11 +291,28 @@ export default function DesktopViewer({
                 });
               }
               
+              // 🔧 투명도 강제 수정 (BubbleWand 특별 처리)
+              if (brushName === 'BubbleWand' && material.transparent === null) {
+                material.transparent = true;
+                material.opacity = Math.max(material.opacity || 1, 0.8);
+                needsUpdate = true;
+                console.log(`🫧 BubbleWand 투명도 강제 수정: ${child.name}[${index}]`);
+              }
+              
               if (needsUpdate) {
                 material.needsUpdate = true;
                 materialFixed++;
                 fixedBrushes.add(brushName);
                 console.log(`✨ 수정 완료: ${child.name}[${index}]`);
+                
+                // 🔧 셰이더 컴파일 상태 확인
+                setTimeout(() => {
+                  if (material.program) {
+                    console.log(`🟢 셰이더 컴파일 성공: ${child.name}[${index}]`);
+                  } else {
+                    console.error(`🔴 셰이더 컴파일 실패: ${child.name}[${index}]`);
+                  }
+                }, 100);
               }
             });
           }
@@ -374,11 +391,25 @@ export default function DesktopViewer({
       
       console.log('✅ 카메라 및 컨트롤 설정 완료');
       
-      // 🔧 디버깅: 모델 가시성 강제 확인
+      // 🔧 디버깅: 모델 가시성 강제 확인 및 BubbleWand 특별 처리
+      let visibleMeshCount = 0;
+      let bubbleWandMeshCount = 0;
+      
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.visible = true;
           child.frustumCulled = false; // 프러스텀 컬링 비활성화
+          visibleMeshCount++;
+          
+          if (child.name.includes('BubbleWand')) {
+            bubbleWandMeshCount++;
+            console.log(`🫧 BubbleWand 메시 강제 활성화: ${child.name}`, {
+              visible: child.visible,
+              position: child.position,
+              scale: child.scale,
+              material: child.material?.type
+            });
+          }
           
           // 머티리얼 확인 및 수정
           if (child.material) {
@@ -390,10 +421,38 @@ export default function DesktopViewer({
                 material.opacity = Math.max(material.opacity || 1, 0.1);
                 material.visible = true;
               }
+              
+              // RawShaderMaterial 특별 처리
+              if (material.type === 'RawShaderMaterial' && child.name.includes('BubbleWand')) {
+                console.log(`🔍 BubbleWand RawShaderMaterial 상태:`, {
+                  transparent: material.transparent,
+                  opacity: material.opacity,
+                  visible: material.visible,
+                  needsUpdate: material.needsUpdate,
+                  uniformCount: material.uniforms ? Object.keys(material.uniforms).length : 0
+                });
+              }
             });
           }
         }
       });
+      
+      console.log(`👁️ 총 ${visibleMeshCount}개 메시 활성화, BubbleWand: ${bubbleWandMeshCount}개`);
+      
+      // 🔧 최종 렌더링 확인
+      setTimeout(() => {
+        let renderingMeshes = 0;
+        scene.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.visible) {
+            renderingMeshes++;
+          }
+        });
+        console.log(`🎬 최종 렌더링 상태: ${renderingMeshes}개 메시가 렌더링 대상`);
+        
+        if (renderingMeshes === 0) {
+          console.error(`🚨 렌더링 중인 메시가 없습니다!`);
+        }
+      }, 500);
       
       setDebugInfo(`모델 로딩 완료! Meshes: ${meshes.length}, ${threeIcosaLoaded ? '(Tilt Brush)' : ''}`);
       
