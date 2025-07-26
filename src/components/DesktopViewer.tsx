@@ -220,9 +220,9 @@ function processAllBrushesOriginal(gltfScene: THREE.Object3D, modelPath: string)
             
             // 기본 유니폼 보강만 수행 (fallback 제거)
             const lightUniforms = {
-              u_ambient_light_color: [0.4, 0.4, 0.4, 1.0],
-              u_SceneLight_0_color: [1.0, 1.0, 1.0, 1.0],
-              u_SceneLight_1_color: [0.6, 0.6, 0.6, 1.0]
+              u_ambient_light_color: [0.6, 0.6, 0.6, 1.0],  // 1번 작품과 동일하게
+              u_SceneLight_0_color: [0.8, 0.8, 0.8, 1.0],   // 1번 작품과 동일하게
+              u_SceneLight_1_color: [0.4, 0.4, 0.4, 1.0]    // 1번 작품과 동일하게
             };
             
             Object.entries(lightUniforms).forEach(([name, defaultValue]) => {
