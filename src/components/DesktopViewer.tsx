@@ -65,7 +65,7 @@ export default function DesktopViewer({
         threeIcosaLoaded = false;
       }
 
-      // 🔥 타임아웃 설정: 10초 이내에 로딩 완료되지 않으면 에러 처리
+      // 🔥 타임아웃 설정: 30초 이내에 로딩 완료되지 않으면 에러 처리
       const loadPromise = loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
           const percent = Math.min(Math.round((progress.loaded / progress.total) * 100), 99);
@@ -74,7 +74,7 @@ export default function DesktopViewer({
       });
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('모델 로딩 타임아웃 (10초 초과)')), 10000);
+        setTimeout(() => reject(new Error('모델 로딩 타임아웃 (30초 초과)')), 30000);
       });
 
       const gltf = await Promise.race([loadPromise, timeoutPromise]) as { scene: THREE.Group };
