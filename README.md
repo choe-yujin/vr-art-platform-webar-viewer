@@ -1,30 +1,125 @@
-# LivingBrush WebAR Viewer
+# 🌐 Web AR Viewer - Three.js 기반 WebAR 3D 뷰어
 
-WebAR viewer with three-icosa and MindAR support for LivingBrush VR art platform.
+> **QR 코드 스캔으로 모바일 브라우저에서 즉시 3D 작품 감상**
+> 
+> VR로 창작된 3D 작품을 별도 앱 설치 없이 모바일 웹브라우저에서 AR로 감상할 수 있는 웹 기반 뷰어입니다.
 
-## Features
 
-- 🎨 **Three.js + three-icosa**: Tilt Brush/Open Brush material support
-- 📱 **MindAR**: Image marker tracking for AR experiences
-- 🖥️ **Device Detection**: Automatic mobile/desktop mode switching
-- ⚡ **Next.js 15**: Modern React framework with TypeScript
-- 🚀 **Vercel Ready**: Optimized for serverless deployment
 
-## Usage
+## 📋 목차
 
-- **Desktop**: 3D viewer with OrbitControls
-- **Mobile**: AR mode with camera + QR marker tracking
-- **URL**: `/ar/view/{id}` for artwork viewing
+- [🎯 프로젝트 개요](#-프로젝트-개요)  
+- [✨ 주요 기능](#-주요-기능)
+- [🛠️ 기술 스택](#️-기술-스택)
+- [📱 사용 방법](#-사용-방법)
+- [🚀 설치 및 실행](#-설치-및-실행)
+- [📁 프로젝트 구조](#-프로젝트-구조)
 
-## Tech Stack
 
-- Next.js 15.3.5
-- Three.js 0.164.0  
-- three-icosa 0.4.2-alpha.18
-- MindAR 1.2.2
-- TypeScript
-- Tailwind CSS
 
-## Deployment
 
-Deployed on Vercel: [livingbrush.shop](https://livingbrush.shop)
+## 🎯 프로젝트 개요
+
+### 프로젝트 목표
+VR로 창작된 3D 작품을 **범용적으로 공유하고 감상**할 수 있는 웹 기반 솔루션 제공
+
+### 해결하는 문제
+- **VR 기기 종속성**: VR 작품을 VR 기기 없이도 감상 가능
+- **앱 설치 부담**: 별도 앱 설치 없이 웹브라우저에서 즉시 감상
+- **공유의 어려움**: QR 코드 하나로 간편한 작품 공유
+
+
+
+## ✨ 주요 기능
+
+### 🎮 핵심 기능
+- **QR 코드 스캔**: 모바일 카메라로 QR 스캔 → 자동으로 웹 뷰어 실행
+- **3D 모델 렌더링**: GLB/GLTF 파일을 Three.js로 실시간 렌더링  
+- **VR 브러시 지원**: Three-icosa 라이브러리로 VR 브러시 텍스처 완벽 재현
+- **인터랙티브 컨트롤**: 터치/마우스로 회전, 확대/축소, 이동 조작
+
+### 🌟 사용자 경험
+- **즉시 접근**: 앱 설치 없이 링크 클릭 만으로 감상 시작
+- **모바일 최적화**: iOS Safari, Android Chrome 완벽 지원
+- **고화질 렌더링**: WebGL 기반 고품질 3D 렌더링
+- **공유 기능**: 링크 복사로 SNS 공유 간편화
+
+
+
+## 🛠️ 기술 스택
+
+### Frontend
+- **Next.js 14** - React 기반 풀스택 프레임워크
+- **TypeScript** - 타입 안전성과 개발 생산성 향상
+- **Tailwind CSS** - 유틸리티 기반 CSS 프레임워크
+
+### 3D 렌더링
+- **Three.js** - WebGL 기반 3D 그래픽 라이브러리
+- **Three-icosa** - Google Tilt Brush/Open Brush VR 브러시 지원
+- **GLTFLoader** - 3D 모델 파일 로딩
+
+### WebAR
+- **AR.js** - 마커 기반 웹 AR 라이브러리  
+- **MindAR.js** - 이미지 트래킹 기반 AR
+
+### 배포 및 인프라
+- **Vercel** - 프론트엔드 배포 플랫폼
+- **AWS S3** - 3D 모델 파일 스토리지
+
+
+## 📱 사용 방법
+
+### 1. QR 코드 스캔
+```
+📱 스마트폰 카메라 앱 실행
+📷 QR 코드에 카메라 향하기
+🔗 자동으로 나타나는 링크 터치
+```
+
+### 2. 웹 뷰어에서 감상
+```
+🌐 브라우저에서 자동으로 뷰어 로딩
+🎨 3D 작품이 화면에 렌더링
+👆 터치/드래그로 자유롭게 조작
+📤 우측 하단 공유 버튼으로 링크 복사
+```
+
+### 3. 지원되는 조작법
+- **회전**: 드래그/스와이프
+- **확대/축소**: 핀치/더블탭
+- **배경 변경**: 상단 우측 배경색 토글 버튼
+- **작품 정보**: 좌측 하단 작품 메타데이터 확인
+
+
+## 📁 프로젝트 구조
+
+```
+web-ar-viewer/
+├── src/
+│   ├── app/                    # Next.js 14 App Router
+│   │   ├── view/[id]/         # 동적 라우팅 (/view/123)
+│   │   └── layout.tsx         # 전역 레이아웃
+│   ├── components/            # React 컴포넌트
+│   │   ├── DesktopViewer.tsx  # 데스크톱 3D 뷰어
+│   │   ├── MobileViewer.tsx   # 모바일 최적화 뷰어  
+│   │   └── ui/                # 공통 UI 컴포넌트
+│   ├── utils/                 # 유틸리티 함수
+│   │   ├── api.ts            # API 통신 함수
+│   │   └── three-helper.ts   # Three.js 헬퍼 함수
+│   └── types/                 # TypeScript 타입 정의
+├── public/                    # 정적 파일
+├── next.config.js            # Next.js 설정
+└── tailwind.config.js        # Tailwind CSS 설정
+```
+
+### 핵심 컴포넌트
+
+#### `DesktopViewer.tsx`
+- Three.js 기반 3D 렌더링 엔진
+- Three-icosa VR 브러시 지원
+- OrbitControls를 통한 마우스/터치 조작
+- 자동 fallback 시스템 (VR 브러시 → 기본 렌더링)
+
+---
+
+⚡ **빠른 체험하기**: QR 코드 스캔 → [데모 링크](https://livingbrush.shop/ar/view/1) → 즉시 3D 작품 감상!
