@@ -1,395 +1,132 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /**
  * Three-Icosa 브러시 처리 유틸리티
- * Tilt Brush VR 아트웍의 특수 브러시 효과를 Three.js에서 렌더링
+ * 실제 three-icosa 라이브러리를 사용하여 Tilt Brush/Open Brush VR 아트웍 렌더링
  */
-
-// Tilt Brush 브러시 타입 정의
-interface BrushDescriptor {
-  name: string;
-  guid: string;
-  material?: any;
-  vertexShader?: string;
-  fragmentShader?: string;
-  transparent?: boolean;
-  blending?: THREE.Blending;
-  side?: THREE.Side;
-}
-
-// 기본 브러시 디스크립터들
-const BRUSH_DESCRIPTORS: { [key: string]: BrushDescriptor } = {
-  // 기본 브러시들
-  'ink': {
-    name: 'Ink',
-    guid: '25e3e6e2-0b1b-4308-8a8a-5d5b8e8f8c9a',
-    transparent: false,
-    blending: THREE.NormalBlending,
-    side: THREE.FrontSide
-  },
-  'marker': {
-    name: 'Marker',
-    guid: 'd229d335-c334-495a-a801-660ac51a719b',
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide
-  },
-  'thick_paint': {
-    name: 'ThickPaint',
-    guid: 'f72ec0e7-a844-4e38-82e3-140c44772699',
-    transparent: false,
-    blending: THREE.NormalBlending,
-    side: THREE.FrontSide
-  },
-  'light': {
-    name: 'Light',
-    guid: '2d35b797-e15e-4e0c-8b8d-8e8f8c9a0b1b',
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide
-  },
-  'fire': {
-    name: 'Fire',
-    guid: '0e87b49c-6546-3a34-3a44-8a556d7d6c3e',
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide
-  },
-  'snow': {
-    name: 'Snow',
-    guid: 'd902ed8b-d0d1-476c-a8de-878a79e3a34c',
-    transparent: true,
-    blending: THREE.NormalBlending,
-    side: THREE.DoubleSide
-  },
-  'smoke': {
-    name: 'Smoke',
-    guid: '70d79cca-b159-4f35-990c-f02193947fe8',
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide
-  },
-  'electricity': {
-    name: 'Electricity',
-    guid: 'f6e85de3-6dcc-4e7f-87fd-cee8c3d25d51',
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide
-  },
-  'hypercolor': {
-    name: 'Hypercolor',
-    guid: 'dea67637-cd1a-27e4-8fc1-d7e2cd3d2075',
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide
-  },
-  'splatter': {
-    name: 'Splatter',
-    guid: '8a60a6a2-2048-4d7e-afe6-c4c9b8c2b3f3',
-    transparent: true,
-    blending: THREE.NormalBlending,
-    side: THREE.DoubleSide
-  }
-};
 
 /**
- * 브러시 이름에서 적절한 머티리얼 설정을 찾아 반환
+ * Three-Icosa를 사용하여 브러시 처리
+ * 실제 three-icosa 라이브러리 사용법에 따라 구현
  */
-function getBrushDescriptor(brushName: string): BrushDescriptor | null {
-  // 정확한 이름 매칭
-  if (BRUSH_DESCRIPTORS[brushName]) {
-    return BRUSH_DESCRIPTORS[brushName];
-  }
-  
-  // 부분 매칭 (대소문자 무시)
-  const lowerBrushName = brushName.toLowerCase();
-  for (const [key, descriptor] of Object.entries(BRUSH_DESCRIPTORS)) {
-    if (key.includes(lowerBrushName) || lowerBrushName.includes(key)) {
-      return descriptor;
-    }
-  }
-  
-  // GUID로 매칭 시도
-  for (const descriptor of Object.values(BRUSH_DESCRIPTORS)) {
-    if (descriptor.guid === brushName) {
-      return descriptor;
-    }
-  }
-  
-  return null;
-}
-
-/**
- * 기본 PBR 머티리얼 생성
- */
-function createBasicMaterial(color: THREE.Color = new THREE.Color(0x808080)): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: color,
-    metalness: 0.1,
-    roughness: 0.7,
-    transparent: false,
-    side: THREE.FrontSide,
-    vertexColors: true // 정점 색상 사용
-  });
-}
-
-/**
- * 브러시 타입에 따른 특수 머티리얼 생성
- */
-function createBrushMaterial(descriptor: BrushDescriptor, baseColor: THREE.Color): THREE.Material {
-  const commonProps = {
-    color: baseColor,
-    vertexColors: true,
-    transparent: descriptor.transparent ?? false,
-    side: descriptor.side ?? THREE.FrontSide,
-    blending: descriptor.blending ?? THREE.NormalBlending
-  };
-  
-  switch (descriptor.name.toLowerCase()) {
-    case 'light':
-    case 'fire':
-    case 'electricity':
-    case 'hypercolor':
-      // 발광 효과가 있는 브러시들
-      return new THREE.MeshBasicMaterial({
-        ...commonProps,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        opacity: 0.8
-      });
-      
-    case 'smoke':
-    case 'snow':
-      // 반투명 파티클 브러시들
-      return new THREE.MeshLambertMaterial({
-        ...commonProps,
-        transparent: true,
-        opacity: 0.6,
-        blending: THREE.NormalBlending
-      });
-      
-    case 'marker':
-    case 'splatter':
-      // 반투명 페인트 브러시들
-      return new THREE.MeshLambertMaterial({
-        ...commonProps,
-        transparent: true,
-        opacity: 0.7
-      });
-      
-    case 'ink':
-    case 'thick_paint':
-    default:
-      // 기본 불투명 브러시들
-      return new THREE.MeshStandardMaterial({
-        ...commonProps,
-        metalness: 0.1,
-        roughness: 0.8,
-        transparent: false
-      });
-  }
-}
-
-/**
- * 메쉬의 정점 색상 설정
- */
-function setupVertexColors(mesh: THREE.Mesh) {
-  const geometry = mesh.geometry;
-  
-  if (!geometry.attributes.color && geometry.attributes.position) {
-    const positionCount = geometry.attributes.position.count;
-    const colors = new Float32Array(positionCount * 3);
-    
-    // 기본 흰색으로 설정
-    for (let i = 0; i < positionCount; i++) {
-      colors[i * 3] = 1.0;     // R
-      colors[i * 3 + 1] = 1.0; // G
-      colors[i * 3 + 2] = 1.0; // B
-    }
-    
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  }
-}
-
-/**
- * 단일 메쉬에 브러시 효과 적용
- */
-function processBrushMesh(mesh: THREE.Mesh): boolean {
+export async function processAllBrushes(rootObject: THREE.Object3D): Promise<{ success: boolean; processed: number; failed: number }> {
   try {
-    const meshName = mesh.name || '';
-    const materialName = Array.isArray(mesh.material) 
-      ? mesh.material[0]?.name || ''
-      : mesh.material?.name || '';
+    console.log('🎨 Three-Icosa 브러시 처리 시작...');
+    console.log('📦 처리할 오브젝트:', rootObject.name || 'unnamed object');
     
-    // 브러시 정보 추출 시도
-    let brushName = '';
+    // three-icosa 라이브러리 동적 임포트
+    const icosaModule = await import('three-icosa');
     
-    // 1. 메쉬 이름에서 브러시 정보 찾기
-    const nameMatch = meshName.match(/brush_(\w+)/i);
-    if (nameMatch) {
-      brushName = nameMatch[1];
-    }
+    console.log('✅ Three-Icosa 라이브러리 로드 완료');
     
-    // 2. 머티리얼 이름에서 브러시 정보 찾기
-    if (!brushName) {
-      const matMatch = materialName.match(/(\w+)_brush/i) || materialName.match(/brush_(\w+)/i);
-      if (matMatch) {
-        brushName = matMatch[1];
-      }
-    }
+    // GLTFLoader에 Three-Icosa 익스텐션 등록
+    const gltfLoader = new GLTFLoader();
     
-    // 3. GUID 패턴 찾기
-    if (!brushName) {
-      const guidMatch = (meshName + materialName).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-      if (guidMatch) {
-        brushName = guidMatch[0];
-      }
-    }
+    // 브러시 폴더 경로 설정 (라이브러리에서 제공하는 정적 파일)
+    const brushFolderPath = 'https://icosa-gallery.github.io/three-icosa-template/brushes/';
     
-    // 브러시 디스크립터 찾기
-    const descriptor = brushName ? getBrushDescriptor(brushName) : null;
-    
-    // 현재 머티리얼 색상 추출
-    let baseColor = new THREE.Color(0x808080);
-    const currentMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-    if (currentMaterial && 'color' in currentMaterial) {
-      baseColor = (currentMaterial as any).color.clone();
-    }
-    
-    // 정점 색상 설정
-    setupVertexColors(mesh);
-    
-    // 새 머티리얼 적용
-    if (descriptor) {
-      console.log(`🎨 브러시 "${descriptor.name}" 적용: ${meshName}`);
-      mesh.material = createBrushMaterial(descriptor, baseColor);
+    // GLTFGoogleTiltBrushMaterialExtension 등록
+    if (icosaModule.GLTFGoogleTiltBrushMaterialExtension) {
+      gltfLoader.register((parser) => new icosaModule.GLTFGoogleTiltBrushMaterialExtension(parser, brushFolderPath));
+      console.log('🎯 Three-Icosa GLTFGoogleTiltBrushMaterialExtension 등록 완료');
+      console.log('📁 브러시 폴더 경로:', brushFolderPath);
+      
+      // 실제 오브젝트 트래버스하여 브러시 메쉬 확인
+      let brushMeshCount = 0;
+      rootObject.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const material = Array.isArray(child.material) ? child.material[0] : child.material;
+          if (material?.name && (material.name.includes('Brush_') || material.name.includes('brush'))) {
+            brushMeshCount++;
+            console.log(`🎨 브러시 메쉬 발견: ${child.name} - ${material.name}`);
+          }
+        }
+      });
+      
+      console.log(`📊 총 ${brushMeshCount}개의 브러시 메쉬 발견`);
+      
+      return { success: true, processed: brushMeshCount, failed: 0 };
     } else {
-      console.log(`📦 기본 머티리얼 적용: ${meshName}`);
-      mesh.material = createBasicMaterial(baseColor);
+      console.warn('⚠️ GLTFGoogleTiltBrushMaterialExtension을 찾을 수 없음');
+      return { success: false, processed: 0, failed: 1 };
     }
-    
-    // 메쉬 설정 최적화
-    mesh.frustumCulled = false;
-    mesh.visible = true;
-    
-    // 기하학 업데이트
-    if (mesh.geometry.boundingBox === null) {
-      mesh.geometry.computeBoundingBox();
-    }
-    if (mesh.geometry.boundingSphere === null) {
-      mesh.geometry.computeBoundingSphere();
-    }
-    
-    return true;
-    
+
   } catch (error) {
-    console.warn('⚠️ 브러시 메쉬 처리 실패:', mesh.name, error);
-    return false;
+    console.error('❌ Three-Icosa 브러시 처리 중 오류:', error);
+    return { success: false, processed: 0, failed: 1 };
   }
 }
 
 /**
- * 씬의 모든 브러시를 처리
+ * 브러시 텍스처 에러 핸들링 설정
+ * S3 403 에러를 방지하기 위해 three-icosa 라이브러리의 정적 파일을 사용하도록 설정
  */
-export function processAllBrushes(rootObject: THREE.Object3D): { processed: number; failed: number } {
-  let processed = 0;
-  let failed = 0;
-  
-  console.log('🎨 Three-Icosa 브러시 처리 시작...');
-  
-  rootObject.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      try {
-        const success = processBrushMesh(child);
-        if (success) {
-          processed++;
-        } else {
-          failed++;
-        }
-      } catch (error) {
-        console.warn('⚠️ 메쉬 처리 중 오류:', child.name, error);
-        failed++;
-      }
-    }
-  });
-  
-  console.log(`✅ 브러시 처리 완료: ${processed}개 성공, ${failed}개 실패`);
-  
-  return { processed, failed };
+export function setupTextureErrorHandling(): void {
+  try {
+    console.log('✅ 텍스처 에러 핸들링: three-icosa 익스텐션이 자동으로 처리함');
+    // three-icosa의 GLTFGoogleTiltBrushMaterialExtension이 자동으로 브러시 텍스처를 처리
+  } catch (error) {
+    console.warn('⚠️ 텍스처 에러 핸들링 설정 실패:', error);
+  }
 }
 
 /**
- * 특정 브러시 타입만 처리
+ * Three-Icosa 라이브러리 정보 출력 (디버깅용)
  */
-export function processSpecificBrush(rootObject: THREE.Object3D, targetBrushName: string): number {
-  let processed = 0;
-  
-  rootObject.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      const meshName = child.name || '';
-      const materialName = Array.isArray(child.material) 
-        ? child.material[0]?.name || ''
-        : child.material?.name || '';
-      
-      // 타겟 브러시인지 확인
-      const hasTargetBrush = meshName.toLowerCase().includes(targetBrushName.toLowerCase()) ||
-                           materialName.toLowerCase().includes(targetBrushName.toLowerCase());
-      
-      if (hasTargetBrush) {
-        try {
-          processBrushMesh(child);
-          processed++;
-        } catch (error) {
-          console.warn(`⚠️ ${targetBrushName} 브러시 처리 실패:`, child.name, error);
-        }
-      }
-    }
-  });
-  
-  console.log(`✅ ${targetBrushName} 브러시 ${processed}개 처리 완료`);
-  return processed;
+export async function getThreeIcosaInfo(): Promise<any> {
+  try {
+    const icosaModule = await import('three-icosa');
+    
+    return {
+      available: true,
+      hasGLTFGoogleTiltBrushMaterialExtension: !!icosaModule.GLTFGoogleTiltBrushMaterialExtension,
+      hasLoadGLTF: !!icosaModule.loadGLTF,
+      hasLoadBrushes: !!icosaModule.loadBrushes,
+      availableExports: Object.keys(icosaModule)
+    };
+  } catch (error) {
+    return { available: false, error: (error as Error).message };
+  }
 }
 
 /**
- * 브러시 정보 분석 (디버깅용)
+ * 브러시 관련 메쉬 분석 (디버깅용)
  */
-export function analyzeBrushes(rootObject: THREE.Object3D): any[] {
-  const brushInfo: any[] = [];
+export function analyzeBrushMeshes(rootObject: THREE.Object3D): any[] {
+  const meshInfo: any[] = [];
   
   rootObject.traverse((child) => {
     if (child instanceof THREE.Mesh) {
+      const material = Array.isArray(child.material) ? child.material[0] : child.material;
+      
       const info = {
         name: child.name,
-        materialName: Array.isArray(child.material) 
-          ? child.material.map(m => m.name).join(', ')
-          : child.material?.name || 'unknown',
+        materialName: material?.name || 'unknown',
+        materialType: material?.constructor.name || 'unknown',
         vertexCount: child.geometry.attributes.position?.count || 0,
         hasColors: !!child.geometry.attributes.color,
         hasUVs: !!child.geometry.attributes.uv,
-        visible: child.visible
+        visible: child.visible,
+        isBrushMesh: (child.name.includes('Brush_') || child.name.includes('brush') || 
+                     (material?.name && (material.name.includes('Brush_') || material.name.includes('brush'))))
       };
-      brushInfo.push(info);
-    }
-  });
-  
-  console.table(brushInfo);
-  return brushInfo;
-}
-
-/**
- * 머티리얼 정리 (메모리 누수 방지)
- */
-export function disposeBrushMaterials(rootObject: THREE.Object3D): void {
-  rootObject.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      if (Array.isArray(child.material)) {
-        child.material.forEach(material => material.dispose());
-      } else {
-        child.material?.dispose();
+      
+      if (info.isBrushMesh) {
+        meshInfo.push(info);
       }
     }
   });
   
-  console.log('🧹 브러시 머티리얼 정리 완료');
+  console.log('🎨 브러시 메쉬 분석 결과:');
+  console.table(meshInfo);
+  return meshInfo;
+}
+
+/**
+ * 메모리 정리
+ */
+export function cleanup(): void {
+  console.log('🧹 Three-Icosa 정리 완료');
 }

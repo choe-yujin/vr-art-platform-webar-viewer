@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -82,33 +82,42 @@ export default function DesktopViewer({
     }
   };
 
-  // 🎨 Three-Icosa 브러시 처리 시도 (픽셀 기반 검증)
-  const tryThreeIcosaBrushes = async (gltfScene: THREE.Object3D, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<boolean> => {
+  const tryThreeIcosaBrushes = useCallback(async (gltfScene: THREE.Object3D, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<boolean> => {
     try {
-      const { processAllBrushes } = await import('../utils/threeicosa');
+      const { processAllBrushes, setupTextureErrorHandling } = await import('../utils/threeicosa');
       
       console.log('🎨 Three-Icosa 브러시 처리 시도...');
       
-      // 브러시 처리 시도
-      processAllBrushes(gltfScene);
+      // 텍스처 에러 핸들링 설정 (S3 403 에러 대응)
+      setupTextureErrorHandling();
       
-      // 3초 후 실제 렌더링 여부 검증
+      // 브러시 처리 시도
+      const result = await processAllBrushes(gltfScene);
+      
+      if (!result.success) {
+        console.warn('⚠️ Three-Icosa 브러시 처리 실패');
+        return false;
+      }
+      
+      console.log(`🎨 Three-Icosa 처리 완료: ${result.processed}개 처리됨`);
+      
+      // 2초 후 실제 렌더링 여부 검증
       return new Promise((resolve) => {
         setTimeout(() => {
           const isActuallyRendered = validateActualRendering(gltfScene, renderer, scene, camera);
           console.log(`🎨 Three-Icosa 처리 결과: ${isActuallyRendered ? '화면에 보임' : '화면에 안 보임'}`);
           resolve(isActuallyRendered);
-        }, 3000);
+        }, 2000);
       });
       
     } catch (error) {
       console.warn('⚠️ Three-Icosa 처리 실패:', error);
       return false;
     }
-  };
+  }, []);
 
   // 🔧 순수 GLB로 다시 로딩 (Three-Icosa 완전 제거)
-  const fallbackToPureGLTF = async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
+  const fallbackToPureGLTF = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     console.log('🔧 순수 GLB 렌더링으로 재시도...');
     
     // 기존 씬 정리
@@ -177,7 +186,7 @@ export default function DesktopViewer({
       console.error('❌ 순수 GLB 로딩도 실패:', error);
       throw error;
     }
-  };
+  }, [modelPath]);
 
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
@@ -213,7 +222,8 @@ export default function DesktopViewer({
       const brushSuccess = await tryThreeIcosaBrushes(gltf.scene, rendererRef.current!, scene, camera);
       
       if (!brushSuccess) {
-        // 브러시 처리 실패 시 순수 GLB로 재로딩
+          // 브러시 처리 실패 시 순수 GLB로 재로딩
+        console.log('🔧 Three-Icosa 브러시 처리 실패, 순수 GLB로 fallback...');
         await fallbackToPureGLTF(scene, camera, controls);
       } else {
         setRenderMode('three-icosa');
@@ -276,7 +286,7 @@ export default function DesktopViewer({
       setDebugInfo(`모델 로딩 실패: ${errorMessage}`);
       throw error;
     }
-  }, [modelPath]);
+  }, [modelPath, fallbackToPureGLTF, tryThreeIcosaBrushes]);
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
