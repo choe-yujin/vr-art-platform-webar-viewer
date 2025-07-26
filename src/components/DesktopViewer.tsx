@@ -48,6 +48,78 @@ export default function DesktopViewer({
     onLoadErrorRef.current = onLoadError;
   }, [onLoadComplete, onLoadError]);
 
+  // 🔥 투명 브러시 전용 기본 GLTF 뷰어로 fallback 하는 함수
+  const loadTransparentGLTF = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
+    console.log('🫧 투명 브러시 전용 GLTF 뷰어로 fallback 시도...');
+    setDebugInfo('투명 브러시 전용 뷰어로 로딩 중...');
+    
+    const basicLoader = new GLTFLoader();
+    const gltf = await basicLoader.loadAsync(modelPath);
+    
+    // 강화된 조명 시스템 (투명 브러시용)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+    scene.add(ambientLight);
+    
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
+    directionalLight1.position.set(10, 10, 10);
+    scene.add(directionalLight1);
+    
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight2.position.set(-10, -10, -10);
+    scene.add(directionalLight2);
+    
+    const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.6);
+    directionalLight3.position.set(0, 15, 0);
+    scene.add(directionalLight3);
+    
+    scene.add(gltf.scene);
+    
+    // 바운딩 박스 계산 및 카메라 설정
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    camera.position.set(
+      center.x + maxDimension * 2.0,
+      center.y + maxDimension * 2.0,
+      center.z + maxDimension * 2.0
+    );
+    camera.lookAt(center);
+    controls.target.copy(center);
+    controls.update();
+    
+    // 투명 브러시 전용 재질 적용
+    let materialCount = 0;
+    gltf.scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.visible = true;
+        child.frustumCulled = false;
+        
+        // 투명도와 굴절 효과가 있는 비누 방울 효과 재질
+        child.material = new THREE.MeshPhysicalMaterial({ 
+          color: new THREE.Color(0.8, 0.9, 1.0), // 연한 파란색
+          transparent: true,
+          opacity: 0.6,
+          transmission: 0.8, // 투과도
+          roughness: 0.0,     // 매우 매끄럽게
+          metalness: 0.0,     // 비금속
+          thickness: 1.0,     // 두께
+          ior: 1.33,          // 물의 굴절률
+          clearcoat: 1.0,     // 투명 코팅
+          clearcoatRoughness: 0.0,
+          reflectivity: 0.8,
+          envMapIntensity: 1.5,
+          side: THREE.DoubleSide // 양면 렌더링
+        });
+        materialCount++;
+      }
+    });
+    
+    setDebugInfo(`투명 브러시 전용 뷰어로 로딩 완료! (재질 ${materialCount}개 적용)`);
+    console.log(`✅ 투명 브러시 전용 GLTF 뷰어로 성공적으로 로드됨 (재질 ${materialCount}개)`);
+  }, [modelPath]);
+
   // 🔥 기본 GLTF 뷰어로 fallback 하는 함수
   const loadBasicGLTF = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     console.log('🔄 기본 GLTF 뷰어로 fallback 시도...');
@@ -99,16 +171,103 @@ export default function DesktopViewer({
     console.log('✅ 기본 GLTF 뷰어로 성공적으로 로드됨');
   }, [modelPath]);
 
-  // 🔥 렌더링 검증 함수
+  // 🔥 브러시 타입 감지 함수 (URL에서 브러시 이름 추출)
+  const detectBrushType = useCallback((modelUrl: string): 'transparent' | 'basic' => {
+    const transparentBrushes = [
+      'BubbleWand', 'Soap', 'Glass', 'Water', 'Crystal', 'Ice', 'Plasma',
+      'Energy', 'Fire', 'Smoke', 'Light', 'Neon', 'Glow', 'Transparent'
+    ];
+    
+    const modelName = modelUrl.toLowerCase();
+    const isTransparent = transparentBrushes.some(brush => 
+      modelName.includes(brush.toLowerCase())
+    );
+    
+    console.log(`🔍 브러시 타입 감지: ${modelUrl} -> ${isTransparent ? '투명' : '기본'}`);
+    return isTransparent ? 'transparent' : 'basic';
+  }, []);
+
+  // 🔥 렌더링 검증 함수 (실제 렌더링 가능 여부 정밀 검사)
   const verifyModelRendered = useCallback((scene: THREE.Scene): boolean => {
-    let visibleMeshCount = 0;
+    let renderableMeshCount = 0;
+    let totalMeshCount = 0;
+    let materialIssues = 0;
+    
     scene.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.visible) {
-        visibleMeshCount++;
+      if (child instanceof THREE.Mesh) {
+        totalMeshCount++;
+        
+        // 1단계: 기본 가시성 체크
+        if (!child.visible) {
+          console.log(`⚠️ 메시 ${totalMeshCount}: visible=false`);
+          return;
+        }
+        
+        // 2단계: 지오메트리 존재 체크
+        if (!child.geometry || !child.geometry.attributes.position) {
+          console.log(`⚠️ 메시 ${totalMeshCount}: 지오메트리 없음`);
+          return;
+        }
+        
+        // 3단계: 재질 존재 및 유효성 체크
+        if (!child.material) {
+          console.log(`⚠️ 메시 ${totalMeshCount}: 재질 없음`);
+          materialIssues++;
+          return;
+        }
+        
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        let validMaterial = false;
+        
+        materials.forEach((material, idx) => {
+          if (material) {
+            // 4단계: 재질 속성 상세 검사
+            const opacity = material.opacity !== undefined ? material.opacity : 1.0;
+            const transparent = material.transparent || false;
+            const visible = material.visible !== undefined ? material.visible : true;
+            
+            // Three-icosa 로딩 실패 시 나타나는 패턴들 감지
+            if (!visible) {
+              console.log(`⚠️ 메시 ${totalMeshCount}-재질${idx}: material.visible=false`);
+              return;
+            }
+            
+            if (transparent && opacity <= 0.01) {
+              console.log(`⚠️ 메시 ${totalMeshCount}-재질${idx}: 거의 투명 (opacity=${opacity})`);
+              return;
+            }
+            
+            // Three-icosa 실패 시 생성되는 빈 재질 감지
+            if (material.type === 'MeshBasicMaterial' || material.type === 'Material') {
+              if (!material.map && !material.color) {
+                console.log(`⚠️ 메시 ${totalMeshCount}-재질${idx}: 빈 재질 (맵도 색상도 없음)`);
+                return;
+              }
+            }
+            
+            validMaterial = true;
+          }
+        });
+        
+        if (validMaterial) {
+          renderableMeshCount++;
+          console.log(`✅ 메시 ${totalMeshCount}: 렌더링 가능`);
+        } else {
+          materialIssues++;
+          console.log(`❌ 메시 ${totalMeshCount}: 재질 문제로 렌더링 불가`);
+        }
       }
     });
-    console.log(`🔍 렌더링 검증: 가시적 메시 개수 = ${visibleMeshCount}`);
-    return visibleMeshCount > 0;
+    
+    console.log(`🔍 렌더링 검증 결과:`);
+    console.log(`  - 전체 메시: ${totalMeshCount}개`);
+    console.log(`  - 렌더링 가능: ${renderableMeshCount}개`);
+    console.log(`  - 재질 문제: ${materialIssues}개`);
+    
+    const isValid = renderableMeshCount > 0 && materialIssues < totalMeshCount;
+    console.log(`  - 최종 판정: ${isValid ? '렌더링 성공' : '렌더링 실패'}`);
+    
+    return isValid;
   }, []);
 
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
@@ -130,9 +289,16 @@ export default function DesktopViewer({
         needsFallback = true;
       }
 
-      // Three-icosa 로드가 실패했다면 바로 기본 뷰어로 fallback
+      // Three-icosa 로드가 실패했다면 브러시 타입에 따라 fallback
       if (needsFallback) {
-        await loadBasicGLTF(scene, camera, controls);
+        const brushType = detectBrushType(modelPath);
+        if (brushType === 'transparent') {
+          console.log('🫧 Three-icosa 로드 실패 + 투명 브러시 감지 -> 투명 전용 뷰어로 fallback');
+          await loadTransparentGLTF(scene, camera, controls);
+        } else {
+          console.log('🎨 Three-icosa 로드 실패 + 일반 브러시 감지 -> 기본 뷰어로 fallback');
+          await loadBasicGLTF(scene, camera, controls);
+        }
         return;
       }
 
@@ -193,29 +359,78 @@ export default function DesktopViewer({
         }
       });
       
-      // 🔥 3초 후 렌더링 검증 - 실제로 모델이 보이는지 확인
+      // 🔥 다단계 렌더링 검증 - 빠른 및 늦은 검증 병행
+      // 1차 검증: 1초 후 (빠른 감지)
       setTimeout(async () => {
-        const isModelVisible = verifyModelRendered(scene);
+        const isModelVisible1 = verifyModelRendered(scene);
         
-        if (!isModelVisible) {
-          console.warn('⚠️ Three-icosa로 로드했지만 모델이 렌더링되지 않음. 기본 뷰어로 fallback...');
+        if (!isModelVisible1) {
+          console.warn('🚨 1초 후 검증: Three-icosa로 로드했지만 모델이 렌더링되지 않음. 빠른 fallback...');
           
           // 기존 씬 클리어
           while(scene.children.length > 0) {
             scene.remove(scene.children[0]);
           }
           
-          // 기본 GLTF 뷰어로 다시 로드
+          // 브러시 타입에 따른 적절한 fallback 선택
+          const brushType = detectBrushType(modelPath);
+          
           try {
-            await loadBasicGLTF(scene, camera, controls);
+            if (brushType === 'transparent') {
+              console.log('🫧 투명 브러시 감지 -> 투명 전용 뷰어로 fallback');
+              await loadTransparentGLTF(scene, camera, controls);
+            } else {
+              console.log('🎨 일반 브러시 감지 -> 기본 뷰어로 fallback');
+              await loadBasicGLTF(scene, camera, controls);
+            }
           } catch (fallbackError) {
-            console.error('❌ 기본 뷰어 fallback도 실패:', fallbackError);
-            throw new Error('모든 로딩 방법이 실패했습니다.');
+            console.error('❌ 1차 적응형 fallback도 실패:', fallbackError);
+            // 최종 fallback: 기본 뷰어를 시도
+            if (brushType === 'transparent') {
+              await loadBasicGLTF(scene, camera, controls);
+            }
+          }
+        } else {
+          console.log('✅ 1차 검증 통과: 모델이 정상 렌더링 중');
+        }
+      }, 1000);
+      
+      // 2차 검증: 4초 후 (최종 확인)
+      setTimeout(async () => {
+        const isModelVisible2 = verifyModelRendered(scene);
+        
+        if (!isModelVisible2) {
+          console.warn('🚨 2차 검증: 4초 후에도 모델이 렌더링되지 않음. 최종 fallback...');
+          
+          // 기존 씬 클리어
+          while(scene.children.length > 0) {
+            scene.remove(scene.children[0]);
+          }
+          
+          // 브러시 타입에 따른 적절한 fallback 선택
+          const brushType = detectBrushType(modelPath);
+          
+          try {
+            if (brushType === 'transparent') {
+              console.log('🫧 투명 브러시 감지 -> 투명 전용 뷰어로 fallback');
+              await loadTransparentGLTF(scene, camera, controls);
+            } else {
+              console.log('🎨 일반 브러시 감지 -> 기본 뷰어로 fallback');
+              await loadBasicGLTF(scene, camera, controls);
+            }
+          } catch (fallbackError) {
+            console.error('❌ 2차 적응형 fallback도 실패:', fallbackError);
+            // 최종 fallback: 기본 뷰어를 시도
+            if (brushType === 'transparent') {
+              await loadBasicGLTF(scene, camera, controls);
+            } else {
+              throw new Error('모든 로딩 방법이 실패했습니다.');
+            }
           }
         } else {
           setDebugInfo(`모델 로딩 완료! ${threeIcosaLoaded ? '(VR 브러시 지원)' : '(기본 모드)'}`);
         }
-      }, 3000);
+      }, 4000);
       
     } catch (error) {
       console.error('❌ Three-icosa 모델 로딩 오류:', error);
@@ -237,7 +452,7 @@ export default function DesktopViewer({
         throw fallbackError;
       }
     }
-  }, [modelPath, loadBasicGLTF, verifyModelRendered]);
+  }, [modelPath, loadTransparentGLTF, loadBasicGLTF, detectBrushType, verifyModelRendered]);
 
   const initializeDesktop3D = useCallback(() => {
     let resizeHandler: (() => void) | null = null;
