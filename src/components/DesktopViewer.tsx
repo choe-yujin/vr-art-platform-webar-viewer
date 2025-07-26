@@ -262,7 +262,26 @@ function processAllBrushesOriginal(gltfScene: THREE.Object3D, modelPath: string)
                 console.log(`✅ ${brushName} 셰이더 컴파일 성공: ${child.name}[${index}]`);
               } else {
                 failedCompiles++;
-                console.log(`❌ ${brushName} 셰이더 컴파일 실패: ${child.name}[${index}] - 하지만 fallback 적용 안함`);
+                console.log(`❌ ${brushName} 셰이더 컴파일 실패: ${child.name}[${index}] - 기본 머티리얼로 교체`);
+                
+                // 🎯 셰이더 실패 시 기본 머티리얼로 교체
+                const fallbackMaterial = new THREE.MeshStandardMaterial({
+                  color: 0xffffff,
+                  transparent: shaderMaterial.transparent || false,
+                  opacity: shaderMaterial.opacity || 1,
+                  side: shaderMaterial.side || THREE.FrontSide,
+                  depthWrite: shaderMaterial.depthWrite !== false,
+                  wireframe: false
+                });
+                
+                // 원본 머티리얼 속성 복사
+                if (Array.isArray(child.material)) {
+                  child.material[index] = fallbackMaterial;
+                } else {
+                  child.material = fallbackMaterial;
+                }
+                
+                console.log(`🔧 ${brushName} 기본 머티리얼로 교체 완료: MeshStandardMaterial`);
               }
             }, 200);
           } else if (materialWithUniforms.type !== 'RawShaderMaterial') {
@@ -392,6 +411,15 @@ export default function DesktopViewer({
       
       // 모델을 씬에 추가
       scene.add(gltf.scene);
+      
+      // 🔍 디버깅용 전역 노출
+      (window as any).debugThreeJS = {
+        scene: scene,
+        gltfScene: gltf.scene,
+        camera: camera,
+        renderer: rendererRef.current
+      };
+      console.log('🔍 Three.js 객체들을 window.debugThreeJS에 노출');
       
       // 🎨 원본 브러시 처리 (회색 fallback 제거)
       processAllBrushesOriginal(gltf.scene, modelPath);
