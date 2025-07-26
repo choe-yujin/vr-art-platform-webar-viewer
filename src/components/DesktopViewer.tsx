@@ -190,7 +190,24 @@ export default function DesktopViewer({
 
   const loadModelForDesktop = useCallback(async (scene: THREE.Scene, camera: THREE.PerspectiveCamera, controls: OrbitControls) => {
     try {
-      const loader = new GLTFLoader();
+      // 🔥 근본 해결: Three-Icosa 익스텐션이 등록된 GLTFLoader를 먼저 얻어오기
+      const { processAllBrushes } = await import('../utils/threeicosa');
+      const dummyObject = new THREE.Object3D();
+      const brushResult = await processAllBrushes(dummyObject);
+      
+      let loader: GLTFLoader;
+      
+      if (brushResult.success && brushResult.gltfLoader) {
+        // Three-Icosa 익스텐션이 등록된 GLTFLoader 사용
+        loader = brushResult.gltfLoader;
+        console.log('✅ Three-Icosa 익스텐션이 등록된 GLTFLoader 사용');
+        setRenderMode('three-icosa');
+      } else {
+        // 기본 GLTFLoader 사용
+        loader = new GLTFLoader();
+        console.log('⚠️ Three-Icosa 실패, 기본 GLTFLoader 사용');
+        setRenderMode('basic-gltf');
+      }
       
       const gltf = await loader.loadAsync(modelPath, (progress) => {
         if (progress.total > 0) {
@@ -218,16 +235,11 @@ export default function DesktopViewer({
       // 모델을 씬에 추가
       scene.add(gltf.scene);
       
-      // 🎯 Three-Icosa 브러시 처리 시도
-      const brushSuccess = await tryThreeIcosaBrushes(gltf.scene, rendererRef.current!, scene, camera);
-      
-      if (!brushSuccess) {
-          // 브러시 처리 실패 시 순수 GLB로 재로딩
-        console.log('🔧 Three-Icosa 브러시 처리 실패, 순수 GLB로 fallback...');
-        await fallbackToPureGLTF(scene, camera, controls);
-      } else {
-        setRenderMode('three-icosa');
+      if (brushResult.success) {
+        console.log(`🎨 Three-Icosa 브러시 처리 완료: ${brushResult.processed}개 처리됨`);
         setDebugInfo('Three-Icosa 브러시 렌더링 성공');
+      } else {
+        setDebugInfo('기본 GLTF 렌더링 모드');
       }
       
       // 바운딩 박스 계산 및 카메라 설정

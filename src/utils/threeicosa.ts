@@ -9,9 +9,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /**
  * Three-Icosa를 사용하여 브러시 처리
- * 실제 three-icosa 라이브러리 사용법에 따라 구현
+ * GLTFLoader에 익스텐션을 등록하고 실제 로더 인스턴스를 반환
  */
-export async function processAllBrushes(rootObject: THREE.Object3D): Promise<{ success: boolean; processed: number; failed: number }> {
+export async function processAllBrushes(rootObject: THREE.Object3D): Promise<{ success: boolean; processed: number; failed: number; gltfLoader?: GLTFLoader }> {
   try {
     console.log('🎨 Three-Icosa 브러시 처리 시작...');
     console.log('📦 처리할 오브젝트:', rootObject.name || 'unnamed object');
@@ -21,7 +21,7 @@ export async function processAllBrushes(rootObject: THREE.Object3D): Promise<{ s
     
     console.log('✅ Three-Icosa 라이브러리 로드 완료');
     
-    // GLTFLoader에 Three-Icosa 익스텐션 등록
+    // 새로운 GLTFLoader 인스턴스 생성
     const gltfLoader = new GLTFLoader();
     
     // 브러시 폴더 경로 설정 (라이브러리에서 제공하는 정적 파일)
@@ -47,7 +47,7 @@ export async function processAllBrushes(rootObject: THREE.Object3D): Promise<{ s
       
       console.log(`📊 총 ${brushMeshCount}개의 브러시 메쉬 발견`);
       
-      return { success: true, processed: brushMeshCount, failed: 0 };
+      return { success: true, processed: brushMeshCount, failed: 0, gltfLoader };
     } else {
       console.warn('⚠️ GLTFGoogleTiltBrushMaterialExtension을 찾을 수 없음');
       return { success: false, processed: 0, failed: 1 };
