@@ -233,7 +233,7 @@ export default function DesktopViewer({
                 rel="noopener noreferrer"
                 className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
               >
-                [다운]
+                다운로드
               </a>
               <button 
                 onClick={() => setShowPromoHeader(false)}
