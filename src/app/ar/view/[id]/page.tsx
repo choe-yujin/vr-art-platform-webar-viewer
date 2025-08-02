@@ -51,6 +51,16 @@ export default function ARViewerPage() {
     const detectedType = isMobile ? 'mobile' : 'desktop';
     deviceDetectedRef.current = true;
     setDeviceType(detectedType);
+    
+    // 모바일인 경우 바로 AR 모드로 진입
+    if (isMobile) {
+      setUserChoice('ar');
+      // 카메라 권한 요청
+      const initAR = async () => {
+        await requestCameraPermission();
+      };
+      initAR();
+    }
   }, []);
 
   const requestCameraPermission = async (): Promise<boolean> => {
@@ -68,27 +78,7 @@ export default function ARViewerPage() {
     }
   };
   
-  const handleArButtonClick = async () => {
-    setUserChoice('ar');
-    // 🔧 AR 뷰어 새로운 키로 완전 재초기화
-    setARViewerKey(prev => prev + 1);
-    
-    if (navigator.permissions) {
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-        setCameraPermission(permissionStatus.state);
-        
-        if (permissionStatus.state === 'prompt') {
-          const granted = await requestCameraPermission();
-          if (!granted) setUserChoice(null);
-        }
-      } catch {
-        await requestCameraPermission();
-      }
-    } else {
-      await requestCameraPermission();
-    }
-  };
+
 
   const handleARError = (error: string) => {
     console.error('❌ AR 뷰어 오류:', error);
@@ -99,12 +89,13 @@ export default function ARViewerPage() {
 
   const handleBackFromAR = () => {
     console.log('🔙 ARViewer에서 뒤로가기');
-    // 🔧 완전한 상태 초기화
-    setUserChoice(null);
+    // 🔧 3D 뷰어로 전환
+    setUserChoice('desktop');
     setCameraPermission(null);
     setShowARErrorPopup(false);
     // AR 뷰어 키 증가로 완전 언마운트 보장
     setARViewerKey(prev => prev + 1);
+    setDesktopViewerKey(prev => prev + 1);
   };
 
   const handleSwitchTo3D = () => {
@@ -198,56 +189,7 @@ export default function ARViewerPage() {
       )}
 
       {/* AR 관련 UI들 */}
-      {/* 📱 모바일 선택 화면 */}
-      {deviceType === 'mobile' && !userChoice && artwork && (
-        <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
-          <div className="text-center p-6 max-w-sm">
-            {/* 🔧 작품 정보 미리보기 (실제 데이터 사용) */}
-            <div className="bg-black/50 rounded-lg p-4 mb-6 text-left">
-              <h2 className="font-bold text-xl mb-2">{artwork.title}</h2>
-              <p className="text-sm opacity-90 mb-1">
-                <span className="text-blue-300">작가:</span> {artwork.user?.nickname || 'Unknown'}
-              </p>
-              {artwork.description && (
-                <p className="text-xs opacity-70 mt-2 leading-relaxed">
-                  {artwork.description.length > 100 
-                    ? `${artwork.description.substring(0, 100)}...`
-                    : artwork.description
-                  }
-                </p>
-              )}
-              <div className="flex items-center gap-4 mt-3 text-xs opacity-60">
-                <span className="flex items-center gap-1">
-                  <span className="text-red-400">❤️</span>
-                  <span>{artwork.favoriteCount?.toLocaleString() || 0}</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="text-blue-400">👁️</span>
-                  <span>{artwork.viewCount?.toLocaleString() || 0}</span>
-                </span>
-              </div>
-            </div>
-            
-            <div className="text-6xl mb-4">📱✨</div>
-            <p className="text-lg font-medium mb-2">어떻게 작품을 감상하시겠습니까?</p>
-            <p className="text-sm opacity-75 mb-4">AR로 현실 공간에 배치하거나, 3D 뷰어로 감상할 수 있습니다</p>
-            <div className="space-y-3 mb-4">
-              <button onClick={handleArButtonClick} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors px-4 py-3 rounded-lg font-medium">
-                📸 카메라로 AR 보기
-              </button>
-              <button 
-                onClick={() => {
-                  setUserChoice('desktop');
-                  setDesktopViewerKey(prev => prev + 1);
-                }} 
-                className="w-full bg-gray-600 hover:bg-gray-700 transition-colors px-4 py-3 rounded-lg font-medium"
-              >
-                🎨 3D 뷰어로 보기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
       
       {/* 카메라 권한 확인 중 */}
       {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'prompt' && (
@@ -268,9 +210,20 @@ export default function ARViewerPage() {
           <div className="text-center p-6 max-w-sm">
             <p className="text-lg font-bold mb-2">⚠️ 카메라 권한이 차단되었습니다</p>
             <p className="text-sm opacity-75 mb-4">AR 모드를 사용하려면 브라우저의 사이트 설정에서 카메라 권한을 직접 허용해주셔야 합니다.</p>
-            <button onClick={handleBackFromAR} className="w-full bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded transition-colors">
-              선택 화면으로 돌아가기
-            </button>
+            <div className="space-y-3">
+              <button 
+                onClick={() => {
+                  setUserChoice('desktop');
+                  setDesktopViewerKey(prev => prev + 1);
+                }} 
+                className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded transition-colors"
+              >
+                🎨 3D 뷰어로 감상하기
+              </button>
+              <button onClick={handleBackFromAR} className="w-full bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded transition-colors">
+                다시 시도하기
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -294,7 +247,7 @@ export default function ARViewerPage() {
                   🎨 3D 뷰어로 감상하기
                 </button>
                 <button onClick={handleBackFromAR} className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
-                  다시 선택하기
+                  다시 시도하기
                 </button>
               </div>
             </div>
