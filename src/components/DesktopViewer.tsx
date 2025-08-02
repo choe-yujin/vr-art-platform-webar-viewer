@@ -23,7 +23,6 @@ export default function DesktopViewer({
   const [showArtistInfo, setShowArtistInfo] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
-  const [backgroundDark, setBackgroundDark] = useState<boolean>(true);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -138,17 +137,7 @@ export default function DesktopViewer({
     }
   }, [unityInstanceRef]);
 
-  // 배경 토글
-  const toggleBackground = useCallback(() => {
-    if (!unityInstanceRef.current) return;
-    
-    try {
-      setBackgroundDark(!backgroundDark);
-      unityInstanceRef.current.SendMessage('BackgroundController', 'ToggleBackground');
-    } catch (error) {
-      console.error('배경 토글 실패:', error);
-    }
-  }, [backgroundDark]);
+  // 배경 토글 기능 제거됨
 
   // 링크 복사
   const handleCopyLink = async () => {
@@ -232,17 +221,27 @@ export default function DesktopViewer({
 
   return (
     <div className="relative w-full h-full bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900">
-      {/* 프로모션 헤더 */}
+      {/* 앱 다운로드 헤더 */}
       {showPromoHeader && (
         <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-r from-purple-600 to-blue-600 text-white p-3 text-center">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">🎨 LivingBrush AR - Unity WebGL 뷰어</span>
-            <button 
-              onClick={() => setShowPromoHeader(false)}
-              className="text-white/80 hover:text-white transition-colors"
-            >
-              ✕
-            </button>
+            <span className="text-sm font-medium">더 깊은 감상을 원한다면? LivingBrush 앱 다운로드</span>
+            <div className="flex items-center gap-2">
+              <a 
+                href="https://play.google.com/store/apps/details?id=com.bauhaus.ar"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
+              >
+                [다운]
+              </a>
+              <button 
+                onClick={() => setShowPromoHeader(false)}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -253,7 +252,7 @@ export default function DesktopViewer({
         className="relative w-full h-full"
         style={{ 
           paddingTop: showPromoHeader ? '60px' : '0px',
-          background: backgroundDark ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' : 'linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 50%, #cce7ff 100%)'
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
         }}
       >
         {/* Unity Canvas */}
@@ -302,15 +301,6 @@ export default function DesktopViewer({
       
         {/* 컨트롤 버튼들 */}
         <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-20">
-          {/* 배경 토글 버튼 */}
-          <button 
-            onClick={toggleBackground}
-            className="bg-white/20 backdrop-blur-md hover:bg-white/30 text-white p-3 rounded-full transition-all duration-200 shadow-lg"
-            title="배경 테마 변경"
-          >
-            {backgroundDark ? '☀️' : '🌙'}
-          </button>
-
           {/* 작품 정보 버튼 */}
           {artwork && (
             <button 
