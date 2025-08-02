@@ -9,7 +9,6 @@ interface ARViewerProps {
   artworkId?: string; // 작품 ID
   onLoadComplete?: () => void;
   onLoadError?: (error: string) => void;
-  onBackPressed?: () => void;
   onSwitchTo3D?: () => void;
 }
 
@@ -17,7 +16,6 @@ export default function ARViewer({
   artworkId,
   onLoadComplete,
   onLoadError,
-  onBackPressed,
   onSwitchTo3D,
 }: ARViewerProps) {
   // 상태 관리
@@ -31,17 +29,27 @@ export default function ARViewer({
   // ref 관리
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const unityInstanceRef = useRef<UnityWebGLInstance | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const onLoadCompleteRef = useRef(onLoadComplete);
   const onLoadErrorRef = useRef(onLoadError);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     onLoadCompleteRef.current = onLoadComplete;
     onLoadErrorRef.current = onLoadError;
+    
+    // 컴포넌트 언마운트 시 카메라 스트림 정리
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(track => track.stop());
+        cameraStreamRef.current = null;
+      }
+    };
   }, [onLoadComplete, onLoadError]);
 
-  // 카메라 권한 요청
+  // 카메라 권한 요청 및 스트림 시작
   const requestCameraPermission = useCallback(async (): Promise<boolean> => {
     try {
       if (!navigator?.mediaDevices?.getUserMedia) {
@@ -56,12 +64,19 @@ export default function ARViewer({
         } 
       });
       
-      // 스트림 정리
-      stream.getTracks().forEach(track => track.stop());
+      // 스트림을 ref에 저장하여 유지
+      cameraStreamRef.current = stream;
+      
+      // 비디오 요소에 스트림 연결
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      
       setCameraPermission('granted');
       return true;
       
-          } catch (error) {
+    } catch (error) {
       console.error('카메라 권한 요청 실패:', error);
       setCameraPermission('denied');
       return false;
@@ -126,7 +141,11 @@ export default function ARViewer({
       const config = {
         dataUrl: "/Build/Build.data.gz",
         frameworkUrl: "/Build/Build.framework.js.gz",
-        codeUrl: "/Build/Build.wasm.gz"
+        codeUrl: "/Build/Build.wasm.gz",
+        // AR 모드를 위한 설정
+        autoSyncPersistentDataPath: true,
+        // Unity 배경을 투명하게 설정
+        backgroundColor: '#00000000'
       };
 
       unityInstanceRef.current = await window.createUnityInstance!(canvas, config);
@@ -195,12 +214,7 @@ export default function ARViewer({
     }
   }, [onSwitchTo3D]);
 
-  // 뒤로가기
-  const handleBackPressed = useCallback(() => {
-    if (onBackPressed) {
-      onBackPressed();
-    }
-  }, [onBackPressed]);
+
 
   // 컴포넌트 마운트 시 Unity AR 초기화
   useEffect(() => {
@@ -247,15 +261,29 @@ export default function ARViewer({
 
   return (
     <div className="relative w-full h-full bg-black">
+      {/* 카메라 비디오 배경 */}
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        autoPlay
+        playsInline
+        muted
+        style={{ 
+          transform: 'scaleX(-1)', // 거울 효과 (선택사항)
+          filter: 'brightness(0.8)' // Unity 오버레이를 위해 약간 어둡게
+        }}
+      />
+      
       {/* Unity AR Canvas */}
-      <div ref={containerRef} className="relative w-full h-full">
+      <div ref={containerRef} className="relative w-full h-full z-10">
         <canvas
           ref={canvasRef}
           id="unity-ar-canvas"
           className="w-full h-full block"
-        style={{ 
+          style={{ 
             touchAction: 'manipulation',
-            outline: 'none'
+            outline: 'none',
+            background: 'transparent' // Unity 배경을 투명하게
           }}
         />
 
@@ -320,16 +348,7 @@ export default function ARViewer({
       )}
 
         {/* 컨트롤 버튼들 */}
-        <div className="absolute top-4 left-4 flex flex-col gap-2 z-20">
-          {/* 뒤로가기 버튼 */}
-          <button
-            onClick={handleBackPressed}
-            className="bg-black/50 backdrop-blur-md hover:bg-black/70 text-white p-3 rounded-full transition-all duration-200"
-            title="뒤로가기"
-          >
-            ←
-          </button>
-
+        <div className="absolute top-4 left-4 z-20">
           {/* 3D 뷰어 전환 버튼 */}
           <button
             onClick={handleSwitchTo3D}

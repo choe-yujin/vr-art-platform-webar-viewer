@@ -172,7 +172,6 @@ export default function ARViewerPage() {
             artworkId={artwork.artworkId.toString()}
             onLoadComplete={() => console.log('Unity AR 로딩 완료')}
             onLoadError={handleARError}
-            onBackPressed={handleBackFromAR}
             onSwitchTo3D={handleSwitchTo3D}
           />
         </div>
@@ -262,7 +261,6 @@ export default function ARViewerPage() {
             key={`ar-${arViewerKey}`}
             artworkId={artwork.artworkId.toString()}
             onLoadError={handleARError} 
-            onBackPressed={handleBackFromAR} 
             onSwitchTo3D={handleSwitchTo3D}
           />
         </div>
