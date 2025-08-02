@@ -45,13 +45,17 @@ export function useArtwork(artworkId: string): UseArtworkResult {
         // 4. GLB URL 검증 및 수정
         const validatedGlbUrl = validateAndFixGlbUrl(artworkData.glbUrl);
         
+        // 5. 프록시를 통한 GLB URL 생성 (Unity WebGL CORS 우회)
+        const proxyGlbUrl = `/api/proxy/glb?url=${encodeURIComponent(validatedGlbUrl)}`;
+        
         // 5. 상태 업데이트
         setArtwork(artworkData);
-        setModelPath(validatedGlbUrl);
+        setModelPath(proxyGlbUrl);
         
         console.log(`✅ 작품 로딩 완료:`, {
           title: artworkData.title,
-          glbUrl: validatedGlbUrl,
+          originalGlbUrl: validatedGlbUrl,
+          proxyGlbUrl: proxyGlbUrl,
           visibility: artworkData.visibility
         });
 

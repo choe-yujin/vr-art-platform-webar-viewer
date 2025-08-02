@@ -18,12 +18,109 @@ const nextConfig: NextConfig = {
     // optimizeCss: true, // 비활성화
   },
   
+  // Unity WebGL 빌드 파일 최적화
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Unity WebGL 빌드 파일들을 정적 자산으로 처리
+      config.module.rules.push({
+        test: /\.(wasm|gz)$/,
+        type: 'asset/resource',
+      });
+    }
+    return config;
+  },
+  
   // 커스텀 헤더
   async headers() {
     return [
       {
         source: '/models/:path*',
         headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/Build/Build.loader.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/api/proxy/glb',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type',
+          },
+        ],
+      },
+      {
+        source: '/Build/:path*.wasm.gz',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/wasm',
+          },
+          {
+            key: 'Content-Encoding',
+            value: 'gzip',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+        ],
+      },
+      {
+        source: '/Build/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+        ],
+      },
+      {
+        source: '/Build/:path*.gz',
+        headers: [
+          {
+            key: 'Content-Encoding',
+            value: 'gzip',
+          },
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',

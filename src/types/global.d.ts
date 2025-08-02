@@ -1,38 +1,20 @@
 // src/types/global.d.ts
 
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-
-export interface MindARThreeConfig {
-  container: HTMLElement;
-  imageTargetSrc: string;
+// Unity WebGL 관련 타입 정의
+export interface UnityWebGLConfig {
+  dataUrl: string;
+  frameworkUrl: string;
+  codeUrl: string;
 }
 
-export interface MindARThreeAnchor {
-  group: THREE.Group;
-  onTargetFound?: () => void;
-  onTargetLost?: () => void;
-}
-
-export interface MindARThreeInstance {
-  renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-  addAnchor: (targetIndex: number) => MindARThreeAnchor;
-  start: () => Promise<void>;
-  stop: () => void;
-}
-
-export interface MindARThreeConstructor {
-  new (config: MindARThreeConfig): MindARThreeInstance;
+export interface UnityWebGLInstance {
+  SendMessage: (gameObjectName: string, methodName: string, parameter?: string | number | boolean) => void;
+  Quit: () => void;
 }
 
 declare global {
   interface Window {
-    MindAR_THREE?: typeof THREE;
-    MindAR_MindARThree?: MindARThreeConstructor;
-    MindAR_GLTFLoader?: typeof GLTFLoader;
-    brushFallbackStats?: Record<string, number>; // 브러시 할백 통계
+    createUnityInstance?: (canvas: HTMLCanvasElement, config: UnityWebGLConfig) => Promise<UnityWebGLInstance>;
   }
 }
 

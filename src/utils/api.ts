@@ -54,7 +54,21 @@ class ArtworkApiError extends Error {
   }
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
+// 환경 변수가 없으면 강제로 설정
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.livingbrush.shop';
+
+// 디버깅용 로그
+console.log('🔧 API URL 설정:', {
+  env: process.env.NEXT_PUBLIC_API_URL,
+  final: API_BASE_URL
+});
+
+// 환경 변수 디버깅
+console.log('🔧 환경 변수 확인:', {
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  API_BASE_URL: API_BASE_URL,
+  NODE_ENV: process.env.NODE_ENV
+});
 
 /**
  * 작품 정보 조회 API
