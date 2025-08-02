@@ -23,7 +23,6 @@ export default function ARViewer({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('AR 뷰어 초기화 중...');
   const [showTimeoutPopup, setShowTimeoutPopup] = useState(false);
-  const [isScanning, setIsScanning] = useState<boolean>(true);
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
 
   // ref 관리
@@ -156,7 +155,6 @@ export default function ARViewer({
       unityInstanceRef.current.SendMessage('ARController', 'EnableARMode');
       
       setStatus('ar-active');
-      setIsScanning(false);
       onLoadCompleteRef.current?.();
       
     } catch (error) {
@@ -193,17 +191,7 @@ export default function ARViewer({
     }
   }, [unityInstanceRef]);
 
-  // AR 스캔 토글
-  const toggleARScan = useCallback(() => {
-    if (!unityInstanceRef.current) return;
-    
-    try {
-      setIsScanning(!isScanning);
-      unityInstanceRef.current.SendMessage('ARController', 'ToggleScanning');
-    } catch (error) {
-      console.error('AR 스캔 토글 실패:', error);
-    }
-  }, [isScanning]);
+
 
 
 
@@ -270,7 +258,7 @@ export default function ARViewer({
         muted
         style={{ 
           transform: 'scaleX(-1)', // 거울 효과 (선택사항)
-          filter: 'brightness(0.8)' // Unity 오버레이를 위해 약간 어둡게
+          filter: 'brightness(1.0)' // Unity 오버레이를 위해 밝기 조정
         }}
       />
       
@@ -283,7 +271,9 @@ export default function ARViewer({
           style={{ 
             touchAction: 'manipulation',
             outline: 'none',
-            background: 'transparent' // Unity 배경을 투명하게
+            background: 'transparent', // Unity 배경을 투명하게
+            mixBlendMode: 'screen', // Unity와 카메라 화면을 블렌드
+            opacity: 0.9 // Unity 투명도 조정
           }}
         />
 
@@ -332,20 +322,7 @@ export default function ARViewer({
           </div>
         )}
 
-        {/* AR 스캔 오버레이 */}
-        {status === 'ar-active' && isScanning && (
-          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-            <div className="text-center text-white">
-              <div className="w-64 h-64 border-2 border-white/50 rounded-lg relative">
-                <div className="absolute inset-0 border-2 border-white/30 rounded-lg animate-pulse"></div>
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div className="text-4xl mb-2">📱</div>
-                  <p className="text-sm">평면을 스캔하고 있습니다...</p>
-                </div>
-              </div>
-          </div>
-        </div>
-      )}
+
 
         {/* 컨트롤 버튼들 */}
         <div className="absolute top-4 left-4 z-20">
@@ -359,16 +336,7 @@ export default function ARViewer({
           </button>
         </div>
 
-        {/* 하단 컨트롤 */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
-          <button
-            onClick={toggleARScan}
-            className="bg-black/50 backdrop-blur-md hover:bg-black/70 text-white px-6 py-3 rounded-full transition-all duration-200"
-            title={isScanning ? '스캔 중지' : '스캔 시작'}
-          >
-            {isScanning ? '⏸️ 스캔 중지' : '▶️ 스캔 시작'}
-          </button>
-        </div>
+
 
         {/* 타임아웃 팝업 */}
       {showTimeoutPopup && (
