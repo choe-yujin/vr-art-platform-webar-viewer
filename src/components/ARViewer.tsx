@@ -23,7 +23,7 @@ export default function ARViewer({
   // 상태 관리
   const [status, setStatus] = useState<'loading' | 'ar-active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [debugInfo, setDebugInfo] = useState<string>('Unity AR 뷰어 초기화 중...');
+  const [debugInfo, setDebugInfo] = useState<string>('AR 뷰어 초기화 중...');
   const [showTimeoutPopup, setShowTimeoutPopup] = useState(false);
   const [isScanning, setIsScanning] = useState<boolean>(true);
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
@@ -79,7 +79,7 @@ export default function ARViewer({
         throw new Error('카메라 권한이 필요합니다');
       }
 
-      setDebugInfo('Unity WebGL 로더 스크립트 로딩 중...');
+              setDebugInfo('AR 뷰어 로딩 중...');
       
       // Unity 로더 스크립트 동적 로드
       if (!window.createUnityInstance) {
@@ -116,7 +116,7 @@ export default function ARViewer({
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      setDebugInfo('Unity WebGL AR 인스턴스 생성 중...');
+              setDebugInfo('AR 뷰어 인스턴스 생성 중...');
       
       const canvas = canvasRef.current;
       if (!canvas) {
@@ -131,7 +131,7 @@ export default function ARViewer({
 
       unityInstanceRef.current = await window.createUnityInstance!(canvas, config);
       
-      setDebugInfo('Unity WebGL AR 초기화 완료! AR 모드 활성화 중...');
+              setDebugInfo('AR 뷰어 초기화 완료! AR 모드 활성화 중...');
       
       // Unity에 AR 모드 활성화 명령
       unityInstanceRef.current.SendMessage('ARController', 'EnableARMode');
@@ -156,7 +156,7 @@ export default function ARViewer({
     }
     
     try {
-      setDebugInfo('Unity AR에 작품 ID 전송 중...');
+              setDebugInfo('AR에 작품 정보 전송 중...');
       
       console.log(`🎯 Unity AR에 작품 ID 전송: ${artworkId}`);
       
@@ -164,13 +164,13 @@ export default function ARViewer({
       // Unity WebGL에서 직접 API 호출하여 GLB 다운로드
       unityInstanceRef.current.SendMessage('ARModelViewer', 'LoadArtworkById', artworkId);
       
-      setDebugInfo('AR 작품 ID 전송 완료! Unity에서 직접 API 호출 중...');
+              setDebugInfo('AR 작품 정보 전송 완료! 모델 로딩 중...');
       
     } catch (error) {
       console.error('Unity AR 작품 로딩 실패:', error);
       setErrorMessage('AR 작품 로딩 실패');
       setStatus('error');
-      onLoadErrorRef.current?.('AR 작품 로딩 실패');
+              onLoadErrorRef.current?.('AR 모델 로딩 실패');
     }
   }, [unityInstanceRef]);
 

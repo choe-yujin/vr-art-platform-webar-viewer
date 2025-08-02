@@ -17,7 +17,7 @@ export default function DesktopViewer({
 }: DesktopViewerProps) {
   const [status, setStatus] = useState<'loading' | 'active' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [debugInfo, setDebugInfo] = useState<string>('Unity WebGL 초기화 중...');
+  const [debugInfo, setDebugInfo] = useState<string>('3D 뷰어 초기화 중...');
   
   const [showPromoHeader, setShowPromoHeader] = useState<boolean>(true);
   const [showArtistInfo, setShowArtistInfo] = useState<boolean>(false);
@@ -39,7 +39,7 @@ export default function DesktopViewer({
   // Unity WebGL 초기화
   const initUnityWebGL = useCallback(async () => {
     try {
-      setDebugInfo('Unity WebGL 로더 스크립트 로딩 중...');
+      setDebugInfo('3D 뷰어 로딩 중...');
       
       // Unity 로더 스크립트 동적 로드
       if (!window.createUnityInstance) {
@@ -76,7 +76,7 @@ export default function DesktopViewer({
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      setDebugInfo('Unity WebGL 인스턴스 생성 중...');
+              setDebugInfo('3D 뷰어 인스턴스 생성 중...');
       
       const canvas = canvasRef.current;
       if (!canvas) {
@@ -98,7 +98,7 @@ export default function DesktopViewer({
 
       unityInstanceRef.current = await window.createUnityInstance!(canvas, config);
       
-      setDebugInfo('Unity WebGL 초기화 완료! 모델 로딩 준비 중...');
+              setDebugInfo('3D 뷰어 초기화 완료! 모델 로딩 준비 중...');
       setStatus('active');
       
       onLoadCompleteRef.current?.();
@@ -119,7 +119,7 @@ export default function DesktopViewer({
     }
 
     try {
-      setDebugInfo('Unity에 작품 ID 전송 중...');
+              setDebugInfo('작품 정보 전송 중...');
       
       console.log(`🎯 Unity에 작품 ID 전송: ${artworkId}`);
       
@@ -127,13 +127,13 @@ export default function DesktopViewer({
       // Unity WebGL에서 직접 API 호출하여 GLB 다운로드
       unityInstanceRef.current.SendMessage('WebGLModelViewer', 'LoadArtworkById', artworkId);
       
-      setDebugInfo('작품 ID 전송 완료! Unity에서 직접 API 호출 중...');
+              setDebugInfo('작품 정보 전송 완료! 모델 로딩 중...');
 
     } catch (error) {
       console.error('Unity 작품 로딩 실패:', error);
       setErrorMessage('작품 로딩 실패');
       setStatus('error');
-      onLoadErrorRef.current?.('작품 로딩 실패');
+              onLoadErrorRef.current?.('모델 로딩 실패');
     }
   }, [unityInstanceRef]);
 
@@ -271,7 +271,7 @@ export default function DesktopViewer({
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
             <div className="text-center text-white">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-              <p className="text-lg font-medium">Unity WebGL 로딩 중...</p>
+              <p className="text-lg font-medium">3D 뷰어 로딩 중...</p>
               <p className="text-sm opacity-75 mt-2">{debugInfo}</p>
             </div>
         </div>
@@ -282,7 +282,7 @@ export default function DesktopViewer({
           <div className="absolute inset-0 bg-red-900/80 flex items-center justify-center z-10">
             <div className="text-center text-white p-6">
               <div className="text-4xl mb-4">❌</div>
-              <h3 className="text-xl font-bold mb-2">Unity WebGL 로딩 실패</h3>
+              <h3 className="text-xl font-bold mb-2">3D 뷰어 로딩 실패</h3>
               <p className="text-sm opacity-90 mb-4">{errorMessage}</p>
             <button 
                 onClick={() => {
