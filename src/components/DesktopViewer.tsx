@@ -4,17 +4,13 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { ArtworkResponse } from '@/utils/api';
 import { UnityWebGLInstance } from '@/types/global';
 
-
-
 interface DesktopViewerProps {
-  modelPath: string;
   artwork?: ArtworkResponse | null;
   onLoadComplete?: () => void;
   onLoadError?: (error: string) => void;
 }
 
 export default function DesktopViewer({ 
-  modelPath, 
   artwork,
   onLoadComplete, 
   onLoadError
@@ -34,6 +30,7 @@ export default function DesktopViewer({
   const unityInstanceRef = useRef<UnityWebGLInstance | null>(null);
   const onLoadCompleteRef = useRef(onLoadComplete);
   const onLoadErrorRef = useRef(onLoadError);
+  const initAttemptsRef = useRef(0);
 
   useEffect(() => {
     onLoadCompleteRef.current = onLoadComplete;
@@ -67,8 +64,8 @@ export default function DesktopViewer({
         
         // Unity 인스턴스 생성 함수가 로드될 때까지 대기
         let attempts = 0;
-        while (!window.createUnityInstance && attempts < 100) { // 대기 시간 증가
-          await new Promise(resolve => setTimeout(resolve, 50));
+        while (!window.createUnityInstance && attempts < 200) { // 대기 시간 증가
+          await new Promise(resolve => setTimeout(resolve, 100));
           attempts++;
         }
         
@@ -77,7 +74,7 @@ export default function DesktopViewer({
         }
         
         // 추가 대기 시간으로 안정성 확보
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       setDebugInfo('Unity WebGL 인스턴스 생성 중...');
@@ -87,10 +84,17 @@ export default function DesktopViewer({
         throw new Error('Canvas 요소를 찾을 수 없습니다');
       }
 
+      // Canvas 크기 설정
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
       const config = {
         dataUrl: "/Build/Build.data.gz",
         frameworkUrl: "/Build/Build.framework.js.gz",
-        codeUrl: "/Build/Build.wasm.gz"
+        codeUrl: "/Build/Build.wasm.gz",
+        companyName: "LivingBrush",
+        productName: "AR Viewer",
+        productVersion: "1.0.0"
       };
 
       unityInstanceRef.current = await window.createUnityInstance!(canvas, config);
@@ -108,28 +112,29 @@ export default function DesktopViewer({
     }
   }, []);
 
-  // Unity에 모델 로딩 명령 전송
-  const loadModelInUnity = useCallback((modelUrl: string) => {
+  // Unity에 작품 ID 전송 (개선된 방식)
+  const loadArtworkInUnity = useCallback((artworkId: string) => {
     if (!unityInstanceRef.current) {
       console.warn('Unity 인스턴스가 아직 준비되지 않았습니다');
       return;
     }
 
     try {
-      setDebugInfo('Unity에 모델 로딩 명령 전송 중...');
+      setDebugInfo('Unity에 작품 ID 전송 중...');
       
-      console.log(`🎯 Unity에 모델 URL 전송: ${modelUrl}`);
+      console.log(`🎯 Unity에 작품 ID 전송: ${artworkId}`);
       
-      // Unity의 WebGLModelViewer 게임오브젝트에 메시지 전송
-      unityInstanceRef.current.SendMessage('WebGLModelViewer', 'LoadModelFromURL', modelUrl);
+      // Unity의 WebGLModelViewer 게임오브젝트에 작품 ID 전송
+      // Unity WebGL에서 직접 API 호출하여 GLB 다운로드
+      unityInstanceRef.current.SendMessage('WebGLModelViewer', 'LoadArtworkById', artworkId);
       
-      setDebugInfo('모델 로딩 명령 전송 완료!');
+      setDebugInfo('작품 ID 전송 완료! Unity에서 직접 API 호출 중...');
 
     } catch (error) {
-      console.error('Unity 모델 로딩 실패:', error);
-      setErrorMessage('모델 로딩 실패');
+      console.error('Unity 작품 로딩 실패:', error);
+      setErrorMessage('작품 로딩 실패');
       setStatus('error');
-      onLoadErrorRef.current?.('모델 로딩 실패');
+      onLoadErrorRef.current?.('작품 로딩 실패');
     }
   }, [unityInstanceRef]);
 
@@ -159,16 +164,38 @@ export default function DesktopViewer({
   // 컴포넌트 마운트 시 Unity 초기화
   useEffect(() => {
     if (containerRef.current && canvasRef.current) {
-      initUnityWebGL();
+      // 이전 Unity 인스턴스 정리
+      if (unityInstanceRef.current) {
+        try {
+          unityInstanceRef.current.Quit();
+        } catch (error) {
+          console.warn('Unity 정리 중 오류:', error);
+        }
+        unityInstanceRef.current = null;
+      }
+      
+      // 초기화 시도 횟수 제한
+      if (initAttemptsRef.current < 3) {
+        initAttemptsRef.current++;
+        initUnityWebGL();
+      } else {
+        setErrorMessage('Unity WebGL 초기화를 여러 번 시도했지만 실패했습니다. 페이지를 새로고침해주세요.');
+        setStatus('error');
+      }
     }
   }, [initUnityWebGL]);
 
-  // 모델 경로 변경 시 Unity에 전송
+          // 작품 ID 변경 시 Unity에 전송
   useEffect(() => {
-    if (unityInstanceRef.current && modelPath) {
-      loadModelInUnity(modelPath);
+    if (unityInstanceRef.current && artwork?.artworkId && status === 'active') {
+      // 약간의 지연을 두어 Unity가 완전히 준비된 후 작품 로딩
+      const timer = setTimeout(() => {
+        loadArtworkInUnity(artwork.artworkId.toString());
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [modelPath, loadModelInUnity]);
+  }, [artwork?.artworkId, loadArtworkInUnity, status]);
 
   // 컴포넌트 언마운트 시 정리
   useEffect(() => {
@@ -181,6 +208,26 @@ export default function DesktopViewer({
         }
       }
     };
+  }, []);
+
+  // Canvas 리사이즈 처리
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      if (canvas && unityInstanceRef.current) {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        try {
+          // Unity WebGL 인스턴스의 리사이즈 처리
+          // SetFullscreen 메서드가 없을 수 있으므로 안전하게 처리
+        } catch (error) {
+          console.warn('Unity 리사이즈 중 오류:', error);
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
@@ -242,6 +289,7 @@ export default function DesktopViewer({
                 onClick={() => {
                   setStatus('loading');
                   setErrorMessage('');
+                  initAttemptsRef.current = 0;
                   initUnityWebGL();
                 }}
                 className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"

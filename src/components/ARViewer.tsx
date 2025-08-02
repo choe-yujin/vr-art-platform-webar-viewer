@@ -6,7 +6,7 @@ import { UnityWebGLInstance } from '@/types/global';
 
 
 interface ARViewerProps {
-  modelPath: string;
+  artworkId?: string; // 작품 ID
   onLoadComplete?: () => void;
   onLoadError?: (error: string) => void;
   onBackPressed?: () => void;
@@ -14,7 +14,7 @@ interface ARViewerProps {
 }
 
 export default function ARViewer({
-  modelPath,
+  artworkId,
   onLoadComplete,
   onLoadError,
   onBackPressed,
@@ -148,28 +148,29 @@ export default function ARViewer({
     }
   }, [requestCameraPermission]);
 
-  // Unity에 모델 로딩 명령 전송
-  const loadModelInUnity = useCallback((modelUrl: string) => {
+  // Unity에 작품 ID 전송 (개선된 방식)
+  const loadArtworkInUnity = useCallback((artworkId: string) => {
     if (!unityInstanceRef.current) {
       console.warn('Unity 인스턴스가 아직 준비되지 않았습니다');
       return;
     }
     
     try {
-      setDebugInfo('Unity AR에 모델 로딩 명령 전송 중...');
+      setDebugInfo('Unity AR에 작품 ID 전송 중...');
       
-      console.log(`🎯 Unity AR에 모델 URL 전송: ${modelUrl}`);
+      console.log(`🎯 Unity AR에 작품 ID 전송: ${artworkId}`);
       
-      // Unity의 ARModelViewer 게임오브젝트에 메시지 전송
-      unityInstanceRef.current.SendMessage('ARModelViewer', 'LoadModelFromURL', modelUrl);
+      // Unity의 ARModelViewer 게임오브젝트에 작품 ID 전송
+      // Unity WebGL에서 직접 API 호출하여 GLB 다운로드
+      unityInstanceRef.current.SendMessage('ARModelViewer', 'LoadArtworkById', artworkId);
       
-      setDebugInfo('AR 모델 로딩 명령 전송 완료!');
+      setDebugInfo('AR 작품 ID 전송 완료! Unity에서 직접 API 호출 중...');
       
     } catch (error) {
-      console.error('Unity AR 모델 로딩 실패:', error);
-      setErrorMessage('AR 모델 로딩 실패');
+      console.error('Unity AR 작품 로딩 실패:', error);
+      setErrorMessage('AR 작품 로딩 실패');
       setStatus('error');
-      onLoadErrorRef.current?.('AR 모델 로딩 실패');
+      onLoadErrorRef.current?.('AR 작품 로딩 실패');
     }
   }, [unityInstanceRef]);
 
@@ -208,12 +209,12 @@ export default function ARViewer({
     }
   }, [initUnityAR]);
 
-  // 모델 경로 변경 시 Unity에 전송
+  // 작품 ID 변경 시 Unity에 전송
   useEffect(() => {
-    if (unityInstanceRef.current && modelPath) {
-      loadModelInUnity(modelPath);
+    if (unityInstanceRef.current && artworkId) {
+      loadArtworkInUnity(artworkId);
     }
-  }, [modelPath, loadModelInUnity]);
+  }, [artworkId, loadArtworkInUnity]);
 
   // 타임아웃 처리
   useEffect(() => {

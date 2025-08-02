@@ -1,19 +1,17 @@
 // src/hooks/useArtwork.ts
 import { useEffect, useState } from 'react';
-import { fetchArtwork, incrementViewCount, extractTokenFromUrl, isValidArtworkId, validateAndFixGlbUrl, ArtworkResponse, ArtworkApiError } from '@/utils/api';
+import { fetchArtwork, incrementViewCount, extractTokenFromUrl, isValidArtworkId, ArtworkResponse, ArtworkApiError } from '@/utils/api';
 
 interface UseArtworkResult {
   artwork: ArtworkResponse | null;
   loading: boolean;
   error: string | null;
-  modelPath: string | null;
 }
 
 export function useArtwork(artworkId: string): UseArtworkResult {
   const [artwork, setArtwork] = useState<ArtworkResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [modelPath, setModelPath] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -24,7 +22,6 @@ export function useArtwork(artworkId: string): UseArtworkResult {
       setLoading(true);
       setError(null);
       setArtwork(null);
-      setModelPath(null);
 
       try {
         // 1. 작품 ID 유효성 검증
@@ -42,21 +39,15 @@ export function useArtwork(artworkId: string): UseArtworkResult {
         
         if (!mounted) return;
 
-        // 4. GLB URL 검증 및 수정
-        const validatedGlbUrl = validateAndFixGlbUrl(artworkData.glbUrl);
-        
-        // 5. 프록시를 통한 GLB URL 생성 (Unity WebGL CORS 우회)
-        const proxyGlbUrl = `/api/proxy/glb?url=${encodeURIComponent(validatedGlbUrl)}`;
-        
-        // 5. 상태 업데이트
+        // 4. 상태 업데이트 (GLB URL은 Unity에서 직접 처리)
         setArtwork(artworkData);
-        setModelPath(proxyGlbUrl);
+        // modelPath는 더 이상 필요하지 않음 (Unity에서 직접 API 호출)
         
         console.log(`✅ 작품 로딩 완료:`, {
           title: artworkData.title,
-          originalGlbUrl: validatedGlbUrl,
-          proxyGlbUrl: proxyGlbUrl,
-          visibility: artworkData.visibility
+          artworkId: artworkData.artworkId,
+          visibility: artworkData.visibility,
+          note: 'GLB URL은 Unity에서 직접 API 호출하여 처리'
         });
 
         // 6. 조회수 증가 (비동기, 에러 무시)
@@ -106,6 +97,5 @@ export function useArtwork(artworkId: string): UseArtworkResult {
     artwork,
     loading,
     error,
-    modelPath,
   };
 }

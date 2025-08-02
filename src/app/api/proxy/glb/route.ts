@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     let targetUrl: URL;
     try {
       targetUrl = new URL(url);
-    } catch (error) {
+    } catch {
       console.error('❌ 유효하지 않은 URL:', url);
       return NextResponse.json(
         { error: 'Invalid URL format' },

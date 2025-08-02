@@ -14,7 +14,7 @@ export default function ARViewerPage() {
   const artworkId = params.id as string;
   
   // 🎨 백엔드 API에서 작품 정보 로드
-  const { artwork, loading: artworkLoading, error: artworkError, modelPath } = useArtwork(artworkId);
+  const { artwork, loading: artworkLoading, error: artworkError } = useArtwork(artworkId);
   
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
   const [userChoice, setUserChoice] = useState<'ar' | 'desktop' | null>(null);
@@ -164,22 +164,21 @@ export default function ARViewerPage() {
       )}
 
       {/* 🖥️ 데스크톱 & 모바일 3D 뷰어 */}
-      {shouldRenderDesktopViewer && modelPath && artwork && (
+      {shouldRenderDesktopViewer && artwork && (
         <div className="w-full h-full relative">
           <DesktopViewer 
             key={`viewer-${desktopViewerKey}`}
-            modelPath={modelPath}
             artwork={artwork}
           />
         </div>
       )}
 
       {/* 📱 Unity WebGL AR 뷰어 */}
-      {shouldRenderARViewer && modelPath && artwork && (
+      {shouldRenderARViewer && artwork && (
         <div className="w-full h-full relative">
           <ARViewer 
             key={`ar-viewer-${arViewerKey}`}
-            modelPath={modelPath}
+            artworkId={artwork.artworkId.toString()}
             onLoadComplete={() => console.log('Unity AR 로딩 완료')}
             onLoadError={handleARError}
             onBackPressed={handleBackFromAR}
@@ -189,11 +188,10 @@ export default function ARViewerPage() {
       )}
 
       {/* 📱 모바일 3D 뷰어 */}
-      {shouldRenderMobileDesktopViewer && modelPath && artwork && (
+      {shouldRenderMobileDesktopViewer && artwork && (
         <div className="w-full h-full relative">
           <DesktopViewer 
             key={`mobile-viewer-${desktopViewerKey}`}
-            modelPath={modelPath}
             artwork={artwork}
           />
         </div>
@@ -201,7 +199,7 @@ export default function ARViewerPage() {
 
       {/* AR 관련 UI들 */}
       {/* 📱 모바일 선택 화면 */}
-      {deviceType === 'mobile' && !userChoice && artwork && modelPath && (
+      {deviceType === 'mobile' && !userChoice && artwork && (
         <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
           <div className="text-center p-6 max-w-sm">
             {/* 🔧 작품 정보 미리보기 (실제 데이터 사용) */}
@@ -305,11 +303,11 @@ export default function ARViewerPage() {
       )}
 
       {/* 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장 */}
-      {shouldRenderARViewer && modelPath && (
+      {shouldRenderARViewer && artwork && (
         <div className="w-full h-full">
           <ARViewer 
             key={`ar-${arViewerKey}`}
-            modelPath={modelPath}
+            artworkId={artwork.artworkId.toString()}
             onLoadError={handleARError} 
             onBackPressed={handleBackFromAR} 
             onSwitchTo3D={handleSwitchTo3D}
@@ -318,7 +316,7 @@ export default function ARViewerPage() {
       )}
 
       {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
-      {shouldRenderMobileDesktopViewer && modelPath && artwork && (
+      {shouldRenderMobileDesktopViewer && artwork && (
         <div className="w-full h-full relative">
           <button 
             onClick={handleBackFromAR} 
@@ -331,7 +329,6 @@ export default function ARViewerPage() {
           </button>
           <DesktopViewer 
             key={`mobile-desktop-${desktopViewerKey}`}
-            modelPath={modelPath}
             artwork={artwork}
           />
         </div>

@@ -26,6 +26,12 @@ const nextConfig: NextConfig = {
         test: /\.(wasm|gz)$/,
         type: 'asset/resource',
       });
+      
+      // WASM 파일 로딩 최적화
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+      };
     }
     return config;
   },
@@ -87,14 +93,6 @@ const nextConfig: NextConfig = {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
           },
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
-          },
-          {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
-          },
         ],
       },
       {
@@ -103,14 +101,6 @@ const nextConfig: NextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
-          },
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
-          },
-          {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
           },
         ],
       },
