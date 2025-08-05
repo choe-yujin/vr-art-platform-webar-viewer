@@ -5,7 +5,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import DesktopViewer from '@/components/DesktopViewer';
-import ARViewer from '@/components/ARViewer';
 import { useArtwork } from '@/hooks/useArtwork';
 
 export default function ARViewerPage() {
@@ -18,12 +17,6 @@ export default function ARViewerPage() {
   
   const [deviceType, setDeviceType] = useState<'mobile' | 'desktop' | null>(null);
   const [userChoice, setUserChoice] = useState<'ar' | 'desktop' | null>(null);
-  const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | null>(null);
-  const [showARErrorPopup, setShowARErrorPopup] = useState(false);
-  
-  // 🔧 고유 키로 컴포넌트 강제 재렌더링 보장
-  const [arViewerKey, setARViewerKey] = useState(0);
-  const [desktopViewerKey, setDesktopViewerKey] = useState(0);
   
   const deviceDetectedRef = useRef(false);
 
@@ -52,67 +45,13 @@ export default function ARViewerPage() {
     deviceDetectedRef.current = true;
     setDeviceType(detectedType);
     
-    // 모바일인 경우 바로 AR 모드로 진입
-    if (isMobile) {
-      setUserChoice('ar');
-      // 카메라 권한 요청
-      const initAR = async () => {
-        await requestCameraPermission();
-      };
-      initAR();
-    }
+    // 모든 디바이스에서 Desktop 뷰어로 진입 (AR 기능 비활성화)
+    setUserChoice('desktop');
+    console.log(`🖥️ ${detectedType} 기기에서 Desktop 뷰어로 진입`);
   }, []);
 
-  const requestCameraPermission = async (): Promise<boolean> => {
-    try {
-      if (!navigator?.mediaDevices?.getUserMedia) {
-        throw new Error('이 브라우저는 카메라를 지원하지 않습니다');
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      stream.getTracks().forEach(track => track.stop());
-      setCameraPermission('granted');
-      return true;
-    } catch {
-      setCameraPermission('denied');
-      return false;
-    }
-  };
-  
-
-
-  const handleARError = (error: string) => {
-    console.error('❌ AR 뷰어 오류:', error);
-    setShowARErrorPopup(true);
-    setUserChoice(null);
-    setCameraPermission(null);
-  };
-
-  const handleBackFromAR = () => {
-    console.log('🔙 ARViewer에서 뒤로가기');
-    // 🔧 3D 뷰어로 전환
-    setUserChoice('desktop');
-    setCameraPermission(null);
-    setShowARErrorPopup(false);
-    // AR 뷰어 키 증가로 완전 언마운트 보장
-    setARViewerKey(prev => prev + 1);
-    setDesktopViewerKey(prev => prev + 1);
-  };
-
-  const handleSwitchTo3D = () => {
-    console.log('🎨 AR에서 3D 뷰어로 전환');
-    // 🔧 AR 완전 정리 후 3D 뷰어로 전환
-    setUserChoice('desktop');
-    setCameraPermission(null);
-    setShowARErrorPopup(false);
-    // 양쪽 뷰어 모두 새로운 키로 재초기화
-    setARViewerKey(prev => prev + 1);
-    setDesktopViewerKey(prev => prev + 1);
-  };
-
   // Unity WebGL 기반 뷰어 렌더링 조건
-  const shouldRenderDesktopViewer = deviceType === 'desktop' || userChoice === 'desktop';
-  const shouldRenderARViewer = deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'granted';
-  const shouldRenderMobileDesktopViewer = deviceType === 'mobile' && userChoice === 'desktop';
+  const shouldRenderDesktopViewer = userChoice === 'desktop';
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -154,132 +93,10 @@ export default function ARViewerPage() {
         </div>
       )}
 
-      {/* 🖥️ 데스크톱 & 모바일 3D 뷰어 */}
+      {/* 🖥️ 모든 디바이스에서 Desktop 뷰어로 작품 감상 */}
       {shouldRenderDesktopViewer && artwork && (
         <div className="w-full h-full relative">
           <DesktopViewer 
-            key={`viewer-${desktopViewerKey}`}
-            artwork={artwork}
-          />
-        </div>
-      )}
-
-      {/* 📱 Unity WebGL AR 뷰어 */}
-      {shouldRenderARViewer && artwork && (
-        <div className="w-full h-full relative">
-          <ARViewer 
-            key={`ar-viewer-${arViewerKey}`}
-            artworkId={artwork.artworkId.toString()}
-            onLoadComplete={() => console.log('Unity AR 로딩 완료')}
-            onLoadError={handleARError}
-            onSwitchTo3D={handleSwitchTo3D}
-          />
-        </div>
-      )}
-
-      {/* 📱 모바일 3D 뷰어 */}
-      {shouldRenderMobileDesktopViewer && artwork && (
-        <div className="w-full h-full relative">
-          <DesktopViewer 
-            key={`mobile-viewer-${desktopViewerKey}`}
-            artwork={artwork}
-          />
-        </div>
-      )}
-
-      {/* AR 관련 UI들 */}
-
-      
-      {/* 카메라 권한 확인 중 */}
-      {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'prompt' && (
-        <div className="absolute inset-0 flex items-center justify-center text-white bg-black/90 z-20">
-          <div className="text-center p-6">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-lg font-medium">카메라 권한 확인 중...</p>
-            <button onClick={handleBackFromAR} className="mt-4 bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded transition-colors">
-              취소
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 카메라 권한 차단됨 */}
-      {deviceType === 'mobile' && userChoice === 'ar' && cameraPermission === 'denied' && (
-        <div className="absolute inset-0 flex items-center justify-center text-white bg-red-900/80 z-20">
-          <div className="text-center p-6 max-w-sm">
-            <p className="text-lg font-bold mb-2">⚠️ 카메라 권한이 차단되었습니다</p>
-            <p className="text-sm opacity-75 mb-4">AR 모드를 사용하려면 브라우저의 사이트 설정에서 카메라 권한을 직접 허용해주셔야 합니다.</p>
-            <div className="space-y-3">
-              <button 
-                onClick={() => {
-                  setUserChoice('desktop');
-                  setDesktopViewerKey(prev => prev + 1);
-                }} 
-                className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded transition-colors"
-              >
-                🎨 3D 뷰어로 감상하기
-              </button>
-              <button onClick={handleBackFromAR} className="w-full bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded transition-colors">
-                다시 시도하기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AR 오류 팝업 */}
-      {showARErrorPopup && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-gray-800 mb-2">AR 뷰어 오류</h3>
-              <p className="text-gray-600 mb-6">시스템 오류로 AR 뷰어를 사용할 수 없습니다. 3D 뷰어로 작품을 감상해보세요!</p>
-              <div className="space-y-3">
-                <button 
-                  onClick={() => { 
-                    setShowARErrorPopup(false); 
-                    setUserChoice('desktop');
-                    setDesktopViewerKey(prev => prev + 1);
-                  }} 
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg font-medium"
-                >
-                  🎨 3D 뷰어로 감상하기
-                </button>
-                <button onClick={handleBackFromAR} className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">
-                  다시 시도하기
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🔧 AR 뷰어: 고유 키로 완전 재렌더링 보장 */}
-      {shouldRenderARViewer && artwork && (
-        <div className="w-full h-full">
-          <ARViewer 
-            key={`ar-${arViewerKey}`}
-            artworkId={artwork.artworkId.toString()}
-            onLoadError={handleARError} 
-            onSwitchTo3D={handleSwitchTo3D}
-          />
-        </div>
-      )}
-
-      {/* 🔧 모바일 3D 뷰어: 고유 키로 완전 재렌더링 보장 */}
-      {shouldRenderMobileDesktopViewer && artwork && (
-        <div className="w-full h-full relative">
-          <button 
-            onClick={handleBackFromAR} 
-            className="absolute top-4 left-4 bg-black/70 hover:bg-black/90 text-white p-3 rounded-full z-20 transition-colors" 
-            aria-label="뒤로가기"
-          >
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <DesktopViewer 
-            key={`mobile-desktop-${desktopViewerKey}`}
             artwork={artwork}
           />
         </div>
