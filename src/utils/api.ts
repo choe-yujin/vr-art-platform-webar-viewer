@@ -54,13 +54,15 @@ class ArtworkApiError extends Error {
   }
 }
 
-// 환경 변수가 없으면 강제로 설정
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.livingbrush.shop';
+// 환경 변수가 없으면 내부 프록시 API 사용
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const USE_INTERNAL_PROXY = !API_BASE_URL || API_BASE_URL === 'proxy';
 
 // 디버깅용 로그
 console.log('🔧 API URL 설정:', {
   env: process.env.NEXT_PUBLIC_API_URL,
-  final: API_BASE_URL
+  useProxy: USE_INTERNAL_PROXY,
+  final: USE_INTERNAL_PROXY ? '내부 프록시 사용' : API_BASE_URL
 });
 
 // 환경 변수 디버깅
@@ -79,7 +81,10 @@ console.log('🔧 환경 변수 확인:', {
  */
 export async function fetchArtwork(artworkId: string, token?: string): Promise<ArtworkResponse> {
   try {
-    const url = `${API_BASE_URL}/api/artworks/${artworkId}`;
+    // 내부 프록시 또는 외부 API 사용 결정
+    const url = USE_INTERNAL_PROXY 
+      ? `/api/artworks/${artworkId}` // 내부 Next.js 프록시
+      : `${API_BASE_URL}/api/artworks/${artworkId}`; // 외부 API
     
     console.log(`🎨 작품 정보 요청: ${url}`);
     
@@ -163,7 +168,10 @@ export async function fetchArtwork(artworkId: string, token?: string): Promise<A
  */
 export async function incrementViewCount(artworkId: string): Promise<void> {
   try {
-    const url = `${API_BASE_URL}/api/artworks/${artworkId}/view`;
+    // 내부 프록시 또는 외부 API 사용 결정
+    const url = USE_INTERNAL_PROXY
+      ? `/api/artworks/${artworkId}/view` // 내부 Next.js 프록시
+      : `${API_BASE_URL}/api/artworks/${artworkId}/view`; // 외부 API
     
     console.log(`👁️ 조회수 증가 요청: ${url}`);
 

@@ -119,21 +119,41 @@ export default function DesktopViewer({
     }
 
     try {
-              setDebugInfo('작품 정보 전송 중...');
+      setDebugInfo('작품 정보 전송 중...');
       
       console.log(`🎯 Unity에 작품 ID 전송: ${artworkId}`);
       
-      // Unity의 WebGLModelViewer 게임오브젝트에 작품 ID 전송
-      // Unity WebGL에서 직접 API 호출하여 GLB 다운로드
-      unityInstanceRef.current.SendMessage('WebGLModelViewer', 'LoadArtworkById', artworkId);
+      // Unity에 API 설정 전송 (항상 프록시 사용)
+      const apiConfig = {
+        // Unity에서 사용할 API URL (프록시 경로)
+        artworkApiUrl: `${window.location.origin}/api/unity?action=artwork&artworkId=${artworkId}`,
+        glbProxyUrl: `${window.location.origin}/api/proxy/glb`,
+        artworkId: artworkId,
+        useProxy: true,
+        corsEnabled: true
+      };
       
-              setDebugInfo('작품 정보 전송 완료! 모델 로딩 중...');
+      console.log('🔧 Unity API 설정:', apiConfig);
+      
+      // Unity의 WebGLModelViewer에 설정 전송
+      unityInstanceRef.current.SendMessage('WebGLModelViewer', 'SetAPIConfig', JSON.stringify(apiConfig));
+      
+      // 짧은 대기 후 작품 로딩 시작
+      setTimeout(() => {
+        if (unityInstanceRef.current) {
+          // Unity의 WebGLModelViewer 게임오브젝트에 작품 ID 전송
+          unityInstanceRef.current.SendMessage('WebGLModelViewer', 'LoadArtworkById', artworkId);
+          console.log('💾 Unity에 작품 로딩 명령 전송 완료');
+        }
+      }, 200);
+      
+      setDebugInfo('작품 정보 전송 완료! 모델 로딩 중...');
 
     } catch (error) {
       console.error('Unity 작품 로딩 실패:', error);
       setErrorMessage('작품 로딩 실패');
       setStatus('error');
-              onLoadErrorRef.current?.('모델 로딩 실패');
+      onLoadErrorRef.current?.('모델 로딩 실패');
     }
   }, [unityInstanceRef]);
 
@@ -177,12 +197,19 @@ export default function DesktopViewer({
           // 작품 ID 변경 시 Unity에 전송
   useEffect(() => {
     if (unityInstanceRef.current && artwork?.artworkId && status === 'active') {
-      // 약간의 지연을 두어 Unity가 완전히 준비된 후 작품 로딩
+      // Unity가 완전히 준비된 후 작품 로딩 - 지연 시간 증가
       const timer = setTimeout(() => {
-        loadArtworkInUnity(artwork.artworkId.toString());
-      }, 500);
+        // 중복 로딩 방지를 위한 체크
+        if (unityInstanceRef.current) {
+          console.log(`🔄 작품 ${artwork.artworkId} 로딩 시작`);
+          loadArtworkInUnity(artwork.artworkId.toString());
+        }
+      }, 1000); // 1초로 지연 시간 증가
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        console.log('⏹️ 작품 로딩 타이머 취소됨');
+      };
     }
   }, [artwork?.artworkId, loadArtworkInUnity, status]);
 

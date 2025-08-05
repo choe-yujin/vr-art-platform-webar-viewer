@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
       targetUrl.protocol = 'https:';
     }
 
+    console.log(`💾 GLB 다운로드 시도: ${targetUrl.toString()}`);
+
     // GLB 파일 다운로드
     const response = await fetch(targetUrl.toString(), {
       method: 'GET',
